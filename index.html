@@ -3989,31 +3989,29 @@
   // ---------- Orders tab ----------
   var ordersStatusFilter = 'all';
 
+  var _ordersPage = 1;
+  var _ordersPageSize = 25;
+
   function renderOrdersTable(){
     var ordersTab = document.getElementById('page-orders');
     if(!ordersTab) return;
 
     var search = (document.getElementById('ordersSearch').value || '').toLowerCase();
-    var purchases = entries.filter(function(e){
+    var allPurchases = entries.filter(function(e){
       if(e.type !== 'purchase') return false;
       var st = effectiveStatus(e);
-      // Received/Listed have graduated into stock and belong on Inventory
-      // only — Orders is for things still working their way toward that
-      // point (Pending) or that fell out of the pipeline (Cancelled/Returned).
       return st === 'Pending' || st === 'Cancelled' || st === 'Returned';
     });
 
-    if(ordersStatusFilter !== 'all'){
-      purchases = purchases.filter(function(e){ return effectiveStatus(e) === ordersStatusFilter; });
-    }
-    if(search){
-      purchases = purchases.filter(function(e){
-        return e.item.toLowerCase().indexOf(search) !== -1 ||
-               String(e.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
-               String(e.site||'').toLowerCase().indexOf(search) !== -1 ||
-               String(e.email||'').toLowerCase().indexOf(search) !== -1;
-      });
-    }
+    var purchases = allPurchases.slice();
+    if(ordersStatusFilter !== 'all') purchases = purchases.filter(function(e){ return effectiveStatus(e) === ordersStatusFilter; });
+    if(search) purchases = purchases.filter(function(e){
+      return e.item.toLowerCase().indexOf(search) !== -1 ||
+             String(e.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
+             String(e.site||'').toLowerCase().indexOf(search) !== -1 ||
+             String(e.email||'').toLowerCase().indexOf(search) !== -1;
+    });
+
     purchases = applySortState('orders', purchases, {
       item:        function(a,b){ return compareText(a.item,b.item); },
       orderNumber: function(a,b){ return compareText(String(a.orderNumber||''),String(b.orderNumber||'')); },
@@ -4024,69 +4022,134 @@
       date:        function(a,b){ return compareText(a.purchasedOn,b.purchasedOn); },
       status:      function(a,b){ return compareText(effectiveStatus(a),effectiveStatus(b)); }
     });
-    if(!tableSortState.orders.key) purchases = purchases.slice().sort(function(a,b){ return b.purchasedOn.localeCompare(a.purchasedOn); });
+    if(!tableSortState.orders || !tableSortState.orders.key){
+      purchases = purchases.slice().sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); });
+    }
 
-    document.getElementById('ordersCountSub').textContent = purchases.length + ' order' + (purchases.length===1?'':'s');
+    // Totals
+    var totalSpend = allPurchases.reduce(function(s,e){ return s+(e.qty||1)*(e.price||0); }, 0);
+    var pendingCount = allPurchases.filter(function(e){ return effectiveStatus(e)==='Pending'; }).length;
+    var cancelledCount = allPurchases.filter(function(e){ return effectiveStatus(e)==='Cancelled'; }).length;
+
+    document.getElementById('ordersCountSub').textContent = purchases.length + ' order'+(purchases.length===1?'':'s');
+
     var wrap = document.getElementById('ordersTableWrap');
-
     if(!purchases.length){
-      wrap.innerHTML = '<div class="empty-state"><div class="icon-big">···</div>No orders match this filter yet.</div>';
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">No orders match this filter.</div>';
       return;
     }
 
-    var statusOptions = ['Received','Listed','Pending','Pre-ordered','Pre-sale','Cancelled','Returned'];
+    var STATUS_COLORS = {
+      'Pending':   { c:'var(--amber)', bg:'var(--amber-dim)', dot:'#f0b35c' },
+      'Cancelled': { c:'var(--red)',   bg:'var(--red-dim)',   dot:'#f06d6d' },
+      'Returned':  { c:'var(--violet)',bg:'var(--violet-dim)',dot:'#b78cf2' }
+    };
+    var statusOptions = ['Pending','Received','Listed','Cancelled','Returned','Pre-ordered','Pre-sale'];
+
+    // Pagination
+    var totalPages = Math.max(1, Math.ceil(purchases.length/_ordersPageSize));
+    if(_ordersPage > totalPages) _ordersPage = totalPages;
+    var pageRows = purchases.slice((_ordersPage-1)*_ordersPageSize, _ordersPage*_ordersPageSize);
 
     var headerRow = buildSortableHeader('orders', [
-      { label: 'Item',            sortKey: 'item',        width: '240px' },
-      { label: 'Order #',         sortKey: 'orderNumber', width: '130px' },
-      { label: 'Qty',             sortKey: 'qty',         cls: 'right', width: '55px' },
-      { label: 'Buy price (each)',sortKey: 'price',       cls: 'right', width: '110px' },
-      { label: 'Total cost',      sortKey: 'total',       cls: 'right', width: '100px' },
-      { label: 'Sourced from',    sortKey: 'site',        width: '130px' },
-      { label: 'Card',                                    width: '120px' },
-      { label: 'Email',                                   width: '160px' },
-      { label: 'Date sourced',    sortKey: 'date',        width: '100px' },
-      { label: 'Status',          sortKey: 'status',      width: '110px' },
-      { label: 'Notes',                                   width: '110px' },
-      { label: '',                                        width: '130px' }
+      { label: 'ID',           width: '70px' },
+      { label: 'Title',        sortKey: 'item',        width: '260px' },
+      { label: 'Status',       sortKey: 'status',      width: '130px' },
+      { label: 'Date Bought',  sortKey: 'date',        width: '110px' },
+      { label: 'Buy Price',    sortKey: 'price',       width: '100px', cls: 'right' },
+      { label: 'Total',        sortKey: 'total',       width: '90px',  cls: 'right' },
+      { label: 'Order #',      sortKey: 'orderNumber', width: '130px' },
+      { label: 'Retailer',     sortKey: 'site',        width: '120px' },
+      { label: 'Email',                                width: '160px' },
+      { label: 'Notes',                                width: '110px' },
+      { label: '',             width: '110px' }
     ]);
 
-    var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>' + headerRow + '</thead><tbody>' +
-      purchases.map(function(e){
-        var statusOpts = statusOptions.map(function(s){
-          return '<option value="'+s+'"'+(effectiveStatus(e)===s?' selected':'')+'>'+s+'</option>';
-        }).join('');
+    var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
+      pageRows.map(function(e){
+        var st = effectiveStatus(e);
+        var sc = STATUS_COLORS[st] || { c:'var(--text-muted)', bg:'var(--surface-2)', dot:'#888' };
+        var itemId = getItemId(e.item);
+        var statusPill = '<div class="order-status-pill" data-order-id="'+escapeAttr(e.id)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
+          '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(st)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr>' +
-          '<td>'+escapeHtml(e.item)+'</td>' +
-          '<td style="color:var(--text-muted);font-size:12px;">'+escapeHtml(e.orderNumber || '—')+'</td>' +
-          '<td class="right">'+e.qty+'</td>' +
-          '<td class="right">'+fmtMoney(e.price)+'</td>' +
-          '<td class="right">'+fmtMoney(e.qty*e.price)+'</td>' +
-          '<td>'+escapeHtml(e.site || '—')+'</td>' +
-          '<td><select data-order-field="cardUsed" data-order-id="'+e.id+'" style="font-size:12px;padding:4px 6px;width:100%;">'+cardOptionsHtml(e.cardUsed)+'</select></td>' +
-          '<td><select data-order-field="email" data-order-id="'+e.id+'" style="font-size:12px;padding:4px 6px;width:100%;">'+emailOptionsHtml(e.email)+'</select></td>' +
-          '<td>'+fmtDateUK(e.purchasedOn)+'</td>' +
-          '<td><select data-order-field="status" data-order-id="'+e.id+'" style="font-size:12px;padding:4px 6px;width:100%;">'+statusOpts+'</select></td>' +
-          '<td><input type="text" data-order-field="notes" data-order-id="'+e.id+'" value="'+escapeAttr(e.notes||'')+'" placeholder="—" style="border:none;background:transparent;font-size:12px;width:100%;"></td>' +
-          '<td class="center" style="white-space:nowrap;"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-order-modal="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Delete</button></td>' +
+          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'—')+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'"><span style="font-weight:500;">'+escapeHtml(e.item)+'</span></td>' +
+          '<td>'+statusPill+'</td>' +
+          '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.purchasedOn||e.date)+'</td>' +
+          '<td class="right" style="font-weight:500;">'+fmtMoney(e.price)+'</td>' +
+          '<td class="right" style="font-weight:600;">'+fmtMoney((e.qty||1)*e.price)+'</td>' +
+          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(String(e.orderNumber||'—'))+'</td>' +
+          '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.site||'—')+'</td>' +
+          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.email||'—')+'</td>' +
+          '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.notes||'—')+'</td>' +
+          '<td class="center" style="white-space:nowrap;"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-order-modal="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Del</button></td>' +
         '</tr>';
-      }).join('') +
-      '</tbody></table>';
+      }).join('') + '</tbody></table>';
 
-    wrap.innerHTML = wrapTableForDisplay('orders', 'Orders', tableHtml);
+    var paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:4px;">' +
+      '<div style="font-size:12px;color:var(--text-muted);">Total spend: <strong style="color:var(--red);">'+fmtMoney(totalSpend)+'</strong></div>' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:12px;color:var(--text-muted);">'+purchases.length+' orders</span>' +
+        '<select id="ordersPageSizeSelect" style="font-size:12px;padding:4px 8px;width:auto;">' +
+          [25,50,100].map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('') +
+        '</select>' +
+        '<button class="btn" id="ordersPrevBtn" style="padding:4px 10px;font-size:12px;"'+(_ordersPage<=1?' disabled':'')+'>‹</button>' +
+        '<span style="font-size:12px;font-weight:600;">'+_ordersPage+' / '+totalPages+'</span>' +
+        '<button class="btn" id="ordersNextBtn" style="padding:4px 10px;font-size:12px;"'+(_ordersPage>=totalPages?' disabled':'')+'>›</button>' +
+      '</div>' +
+    '</div>';
 
+    wrap.innerHTML = wrapTableForDisplay('orders','Orders',tableHtml) + paginationHtml;
     wireSortableHeaders(wrap, renderOrdersTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.orders = renderOrdersTable;
 
-    wrap.querySelectorAll('[data-order-field]').forEach(function(el){
-      el.addEventListener('change', function(){ updateOrderField(this); });
-      if(el.tagName === 'INPUT') el.addEventListener('blur', function(){ updateOrderField(this); });
+    // Pagination
+    var prev = document.getElementById('ordersPrevBtn');
+    var next = document.getElementById('ordersNextBtn');
+    var sz   = document.getElementById('ordersPageSizeSelect');
+    if(prev) prev.addEventListener('click', function(){ if(_ordersPage>1){ _ordersPage--; renderOrdersTable(); }});
+    if(next) next.addEventListener('click', function(){ if(_ordersPage<totalPages){ _ordersPage++; renderOrdersTable(); }});
+    if(sz){
+      sz.value = String(_ordersPageSize);
+      sz.addEventListener('change', function(){ _ordersPageSize=parseInt(this.value); _ordersPage=1; renderOrdersTable(); });
+    }
+
+    // Status pill dropdown
+    wrap.querySelectorAll('.order-status-pill').forEach(function(pill){
+      pill.addEventListener('click', function(e){
+        e.stopPropagation();
+        var ex = document.getElementById('orderStatusDropdown');
+        if(ex){ ex.remove(); return; }
+        var entryId = pill.getAttribute('data-order-id');
+        var rect = pill.getBoundingClientRect();
+        var dd = document.createElement('div');
+        dd.id = 'orderStatusDropdown';
+        dd.style.cssText = 'position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:160px;top:'+(rect.bottom+4)+'px;left:'+rect.left+'px;';
+        statusOptions.forEach(function(s){
+          var sc2 = STATUS_COLORS[s]||{dot:'#888'};
+          var opt = document.createElement('div');
+          opt.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;';
+          opt.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:'+(sc2.dot||'#888')+';"></span>'+escapeHtml(s);
+          opt.onmouseover=function(){this.style.background='var(--surface-2)';};
+          opt.onmouseout=function(){this.style.background='';};
+          opt.addEventListener('click', function(){
+            dd.remove();
+            var entry = entries.find(function(en){ return en.id===entryId; });
+            if(entry){ entry.status=s; saveEntries(); renderAll(); showToast('Status → '+s); }
+          });
+          dd.appendChild(opt);
+        });
+        document.body.appendChild(dd);
+        setTimeout(function(){ document.addEventListener('click',function rm(){ dd.remove(); document.removeEventListener('click',rm); }); },10);
+      });
     });
+
     wrap.querySelectorAll('[data-edit-order-modal]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var id = this.getAttribute('data-edit-order-modal');
-        var entry = entries.find(function(e){ return e.id === id; });
+        var entry = entries.find(function(e){ return e.id===id; });
         if(entry) openAddModal('order', entry);
       });
     });
@@ -4097,7 +4160,7 @@
     });
   }
 
-  function updateOrderField(el){
+    function updateOrderField(el){
     var id = el.getAttribute('data-order-id');
     var field = el.getAttribute('data-order-field');
     var entry = entries.find(function(e){ return e.id === id; });
