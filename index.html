@@ -1657,8 +1657,8 @@
 
   // Carrier detection by tracking number format
   var CARRIER_PATTERNS = [
-    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}GB$/i,          color: '#e60026', track: null }, // uses API
-    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/i,    color: '#e60026', track: null },
+    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}GB$/i,          color: '#e60026', track: 'https://www.royalmail.com/track-your-item#/tracking-results/{n}' },
+    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/i,    color: '#e60026', track: 'https://www.royalmail.com/track-your-item#/tracking-results/{n}' },
     { carrier: 'Evri',        regex: /^[HJ][0-9A-Z]{15,}$/i,         color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
     { carrier: 'Evri',        regex: /^[A-Z]{3}\d{9}$/i,             color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
     { carrier: 'DHL',         regex: /^\d{10,11}$/,                   color: '#ffcc00', track: 'api' },
@@ -1682,16 +1682,25 @@
   async function getRoyalMailToken() {
     if(_royalMailToken && Date.now() < _royalMailTokenExpiry) return _royalMailToken;
     try {
-      var res = await fetch('https://api.royalmail.net/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'grant_type=client_credentials&client_id=' + ROYAL_MAIL_CLIENT_ID + '&client_secret=' + ROYAL_MAIL_CLIENT_SECRET
-      });
-      var data = await res.json();
-      if(data.access_token){
-        _royalMailToken = data.access_token;
-        _royalMailTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
-        return _royalMailToken;
+      // Try both possible OAuth endpoints
+      var endpoints = [
+        'https://api.royalmail.net/oauth2/token',
+        'https://authentication.royalmail.net/token'
+      ];
+      for(var i = 0; i < endpoints.length; i++){
+        var res = await fetch(endpoints[i], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'grant_type=client_credentials&client_id=' + ROYAL_MAIL_CLIENT_ID + '&client_secret=' + ROYAL_MAIL_CLIENT_SECRET
+        });
+        if(res.ok){
+          var data = await res.json();
+          if(data.access_token){
+            _royalMailToken = data.access_token;
+            _royalMailTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
+            return _royalMailToken;
+          }
+        }
       }
     } catch(e) { console.warn('Royal Mail token error:', e); }
     return null;
@@ -1700,22 +1709,43 @@
   async function fetchRoyalMailStatus(trackingNum) {
     try {
       var token = await getRoyalMailToken();
-      if(!token) return null;
-      var res = await fetch('https://api.royalmail.net/shipping/v3/trackings/' + encodeURIComponent(trackingNum), {
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-      });
-      if(!res.ok) return null;
-      var data = await res.json();
-      if(data && data.mailPieces && data.mailPieces[0]){
-        var mp = data.mailPieces[0];
-        var events = mp.events || [];
-        var latest = events[0];
-        return {
-          status: mp.summary && mp.summary.statusDescription || 'Unknown',
-          location: latest && latest.locationName || '',
-          timestamp: latest && latest.eventDateTime || '',
-          events: events.slice(0, 5)
-        };
+      if(!token){
+        // Token failed — return null so we fall back to tracking link
+        return null;
+      }
+      // Try both v1 and v2 tracking endpoints
+      var endpoints = [
+        'https://api.royalmail.net/shipping/v3/trackings/' + encodeURIComponent(trackingNum),
+        'https://api.royalmail.net/mailpieces/v2/' + encodeURIComponent(trackingNum) + '/events'
+      ];
+      for(var i = 0; i < endpoints.length; i++){
+        var res = await fetch(endpoints[i], {
+          headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'X-Accept-RMG-Terms': 'yes' }
+        });
+        if(res.ok){
+          var data = await res.json();
+          if(data && data.mailPieces && data.mailPieces[0]){
+            var mp = data.mailPieces[0];
+            var events = mp.events || [];
+            var latest = events[0];
+            return {
+              status: mp.summary && mp.summary.statusDescription || 'Unknown',
+              location: latest && latest.locationName || '',
+              timestamp: latest && latest.eventDateTime || '',
+              events: events.slice(0,5)
+            };
+          }
+          if(data && data.mailPieceId){
+            var events2 = data.events || [];
+            var latest2 = events2[0];
+            return {
+              status: latest2 && latest2.eventName || 'Unknown',
+              location: latest2 && latest2.locationName || '',
+              timestamp: latest2 && latest2.eventDateTime || '',
+              events: events2.slice(0,5).map(function(ev){ return { eventDateTime: ev.eventDateTime, eventDescription: ev.eventName }; })
+            };
+          }
+        }
       }
     } catch(e) { console.warn('Royal Mail tracking error:', e); }
     return null;
