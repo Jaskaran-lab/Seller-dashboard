@@ -1805,6 +1805,7 @@
 
   function saveManualTracking(){
     localStorage.setItem('inventory:manualTracking', JSON.stringify(_manualTrackingNumbers));
+    console.log('Saved tracking numbers:', _manualTrackingNumbers.length, JSON.stringify(_manualTrackingNumbers));
   }
 
   // ============================================================
@@ -5074,23 +5075,26 @@
   document.getElementById('refreshTrackingBtn').addEventListener('click', renderTrackingPage);
   document.getElementById('trackingSearch').addEventListener('input', renderTrackingPage);
 
-  document.getElementById('trackParcelBtn').addEventListener('click', function(){
-    document.getElementById('trackParcelModal').style.display = 'flex';
-    document.getElementById('manualTrackingNum').focus();
-  });
-  document.getElementById('cancelTrackParcel').addEventListener('click', function(){
-    document.getElementById('trackParcelModal').style.display = 'none';
-  });
-  document.getElementById('confirmTrackParcel').addEventListener('click', function(){
-    var num = document.getElementById('manualTrackingNum').value.trim();
-    var label = document.getElementById('manualTrackingLabel').value.trim();
-    if(!num){ showToast('Please enter a tracking number.', true); return; }
-    _manualTrackingNumbers.push({ num: num, label: label || num });
-    saveManualTracking();
-    document.getElementById('trackParcelModal').style.display = 'none';
-    document.getElementById('manualTrackingNum').value = '';
-    document.getElementById('manualTrackingLabel').value = '';
-    renderTrackingPage();
+  // Tracking modal — use event delegation so listeners always fire
+  document.body.addEventListener('click', function(e){
+    if(e.target.id === 'trackParcelBtn' || e.target.closest('#trackParcelBtn')){
+      document.getElementById('trackParcelModal').style.display = 'flex';
+      document.getElementById('manualTrackingNum').focus();
+    }
+    if(e.target.id === 'cancelTrackParcel'){
+      document.getElementById('trackParcelModal').style.display = 'none';
+    }
+    if(e.target.id === 'confirmTrackParcel'){
+      var num = document.getElementById('manualTrackingNum').value.trim();
+      var label = document.getElementById('manualTrackingLabel').value.trim();
+      if(!num){ showToast('Please enter a tracking number.', true); return; }
+      _manualTrackingNumbers.push({ num: num, label: label || num });
+      saveManualTracking();
+      document.getElementById('trackParcelModal').style.display = 'none';
+      document.getElementById('manualTrackingNum').value = '';
+      document.getElementById('manualTrackingLabel').value = '';
+      renderTrackingPage();
+    }
   });
 
   document.getElementById('trackingViewTabs').addEventListener('click', function(e){
