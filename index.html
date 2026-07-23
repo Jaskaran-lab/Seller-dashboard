@@ -5315,7 +5315,7 @@
         var linkedMatch = resolveMatchedEntry(e.matchedItem);
         var netProfit = netProfitForSale(e);
         var itemId = linkedMatch ? (linkedMatch.type==='ticket' ? getTicketId(linkedMatch.id) : getItemId(linkedMatch.item)) : getItemId(e.item);
-        var netProfitCell = netProfit!==null ? '<span class="'+(netProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(netProfit)+'</span>' : '<span style="color:var(--text-muted);">—</span>';
+        var netProfitCell = netProfit!==null ? '<span style="font-weight:600;color:'+(netProfit>=0?'var(--green)':'var(--red)')+';">'+fmtMoneySigned(netProfit)+'</span>' : '<span style="color:var(--text-muted);">—</span>';
         var linkedName = linkedMatch ? linkedMatch.item : (e.matchedItem||'');
         var priceCell = fmtMoney(e.price);
         if(linkedMatch && linkedMatch.type==='ticket'){
@@ -5345,8 +5345,8 @@
     // Footer with revenue, profit, pagination
     var paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:4px;">' +
       '<div style="display:flex;gap:20px;font-size:12px;">' +
-        '<span>Revenue: <strong style="color:var(--text-primary);">'+fmtMoney(totalRevenue)+'</strong></span>' +
-        '<span>Profit: <strong class="'+(totalProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(totalProfit)+'</strong>' +
+        '<span style="color:var(--text-muted);">Revenue: <strong style="color:var(--green);">'+fmtMoney(totalRevenue)+'</strong></span>' +
+        '<span style="color:var(--text-muted);">Profit: <strong style="color:'+(totalProfit>=0?'var(--green)':'var(--red)')+';">'+fmtMoneySigned(totalProfit)+'</strong>' +
           (unlinkedCount?'<span style="color:var(--text-muted);font-size:11px;"> ('+unlinkedCount+' unlinked)</span>':'') +
         '</span>' +
       '</div>' +
