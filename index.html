@@ -226,10 +226,25 @@
     position: absolute;
     right: 14px;
     top: 14px;
-    width: 30px; height: 30px;
-    border-radius: 8px;
+    width: 44px; height: 44px;
+    border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
-    opacity: 0.9;
+    opacity: 0.95;
+  }
+  .stat-card .icon-inner {
+    position: relative;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stat-card .icon-svg-wrap {
+    position: absolute; inset: 0;
+  }
+  .stat-card .icon-symbol {
+    position: relative; z-index: 1;
+    font-size: 18px; line-height: 1;
+  }
+  @keyframes icon-spin { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -141; } }
+  .icon-ring { animation: icon-spin 2.5s linear infinite; transform-origin: center; }
   }
   .pos { color: var(--green); }
   .neg { color: var(--red); }
@@ -612,6 +627,92 @@
     .stat-row { grid-template-columns: repeat(2, 1fr); }
     .two-col { grid-template-columns: 1fr; }
   }
+
+  @media (max-width: 600px) {
+    /* Sidebar becomes bottom tab bar */
+    body { flex-direction: column-reverse; }
+    .sidebar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      width: 100%; height: 56px;
+      flex-direction: row; overflow-x: auto;
+      padding: 0; z-index: 100;
+      border-top: 1px solid var(--border);
+      border-right: none;
+      background: var(--surface);
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .sidebar::-webkit-scrollbar { display: none; }
+    .nav-group { display: flex; flex-direction: row; margin: 0; flex: 1; }
+    .nav-item {
+      flex-direction: column; gap: 2px;
+      padding: 6px 10px; min-width: 56px;
+      font-size: 9px; white-space: nowrap;
+      border-radius: 0; border-left: none;
+      border-top: 2px solid transparent;
+    }
+    .nav-item.active { border-top: 2px solid var(--indigo); border-left: none; background: transparent; }
+    .nav-item .ic { font-size: 16px; display: block; }
+    .nav-label, .brand, .sidebar-foot, .theme-toggle-btn { display: none; }
+
+    /* Main content area */
+    .main {
+      padding: 12px;
+      padding-bottom: 70px; /* space for bottom tab bar */
+      overflow-x: hidden;
+    }
+
+    /* Page header stacks */
+    .page-header {
+      flex-direction: column; gap: 10px; align-items: flex-start;
+      padding-bottom: 12px;
+    }
+    .page-header h1 { font-size: 22px; }
+    .header-right { flex-wrap: wrap; gap: 8px; width: 100%; }
+    .header-right input, .header-right select { flex: 1; min-width: 0; }
+
+    /* Stat cards single column on very small screens */
+    .stat-row { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+    .stat-card { padding: 12px; }
+    .stat-card .value { font-size: 18px; }
+
+    /* Tables scroll horizontally */
+    .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { min-width: 600px; }
+
+    /* Panels */
+    .panel { border-radius: 10px; padding: 12px; }
+    .panel-head { flex-direction: column; gap: 8px; }
+
+    /* Aurora canvas smaller on mobile */
+    #constellationCanvas { opacity: 0.5; }
+
+    /* Modals full screen on mobile */
+    .modal-box {
+      width: 100% !important; max-width: 100% !important;
+      height: 100vh; border-radius: 0 !important;
+      overflow-y: auto;
+    }
+
+    /* Two col grids become single */
+    .two-col, [style*="grid-template-columns: repeat(2"] { grid-template-columns: 1fr !important; }
+
+    /* Buttons */
+    .btn { font-size: 13px; padding: 8px 14px; }
+    .btn-primary { width: 100%; justify-content: center; }
+
+    /* Orders table on mobile — hide less important cols */
+    .table-scroll-wrap table td:nth-child(6),
+    .table-scroll-wrap table th:nth-child(6),
+    .table-scroll-wrap table td:nth-child(7),
+    .table-scroll-wrap table th:nth-child(7) { display: none; }
+
+    /* Tracking cards single column */
+    #trackingWrap > div[style*="grid"] { grid-template-columns: 1fr !important; }
+
+    /* Recent activity */
+    #overviewActivityWrap { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -642,6 +743,7 @@
     <div class="nav-item" data-page="preorders"><span class="ic">◷</span> Pre-Orders</div>
     <div class="nav-item" data-page="expenses"><span class="ic">⊟</span> Expenses</div>
     <div class="nav-item" data-page="income"><span class="ic">↗</span> Income</div>
+    <div class="nav-item" data-page="tracking"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12V6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v6"/><path d="M3 12h18l-2 7H5l-2-7z"/><path d="M9 12V8m6 4V8"/></svg></span> Tracking</div>
   </div>
   <div class="nav-group" style="margin-top: auto; margin-bottom: 6px;">
     <div class="nav-item" data-page="settings"><span class="ic">⚙</span> Settings</div>
@@ -656,7 +758,7 @@
 
   <div class="page active" id="page-dashboard">
     <div class="page-header" style="position:relative; overflow:hidden;">
-      <canvas id="constellationCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0.35;"></canvas>
+      <canvas id="constellationCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0.85;"></canvas>
       <div style="position:relative; z-index:1;">
         <div id="dashboardGreeting" style="color:var(--text-secondary); font-size:13px; margin-bottom:4px;">DASHBOARD</div>
         <h1 id="dashboardGreetingMain">Good day</h1>
@@ -727,10 +829,10 @@
             <h2>Recent Activity</h2>
             <span class="sub">Latest orders at a glance</span>
           </div>
-          <div class="legend">
-            <span><span class="dot" style="background:var(--amber)"></span>Orders</span>
-            <span><span class="dot" style="background:var(--green)"></span>Sales</span>
-            <span><span class="dot" style="background:var(--violet)"></span>Pre-Orders</span>
+          <div class="legend" id="activityFilterTabs" style="cursor:pointer;">
+            <span data-af="orders" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;background:var(--amber-dim);"><span class="dot" style="background:var(--amber)"></span><span style="font-size:12px;color:var(--amber);font-weight:600;">Orders</span></span>
+            <span data-af="sales" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;"><span class="dot" style="background:var(--green)"></span><span style="font-size:12px;color:var(--text-secondary);">Sales</span></span>
+            <span data-af="preorders" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;"><span class="dot" style="background:var(--violet)"></span><span style="font-size:12px;color:var(--text-secondary);">Pre-Orders</span></span>
           </div>
         </div>
         <div id="overviewActivityWrap"></div>
@@ -1019,23 +1121,53 @@
 
   <div class="page" id="page-expenses">
     <div class="page-header">
-      <div><h1>Expenses</h1><p>Overhead and operating costs</p></div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Tracker</div>
+        <h1>Expenses</h1>
+      </div>
       <div class="header-right">
-        <input type="text" id="expensesSearch" placeholder="Search expenses..." style="max-width:220px;">
-        <button class="btn btn-primary" id="addExpenseBtn">+ Add</button>
+        <div id="expensesDateDisplay" style="font-size:12px;color:var(--text-muted);background:var(--surface-2);padding:6px 12px;border-radius:8px;border:1px solid var(--border);"></div>
+        <button class="btn" id="exportExpensesBtn" style="font-size:12px;">↓ Export CSV</button>
+        <button class="btn btn-primary" id="addExpenseBtn">+ Add Expense</button>
       </div>
     </div>
 
-    <div class="stat-row" id="expensesSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
+    <!-- Stat cards -->
+    <div class="stat-row" id="expensesSummaryRow" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px;"></div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Expenses</h2>
-          <span class="sub" id="expensesCountSub">0 expenses</span>
-        </div>
+    <!-- Category mini cards -->
+    <div id="expensesCategoryCards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+    <!-- Filter tabs -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <div id="expensesTypeTabs" style="display:flex;gap:4px;">
+        <button class="exp-type-tab active" data-exptype="all" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:var(--surface-2);color:var(--text-primary);font-weight:600;">All</button>
+        <button class="exp-type-tab" data-exptype="one-off" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">One-off</button>
+        <button class="exp-type-tab" data-exptype="recurring" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Recurring</button>
+        <button class="exp-type-tab" data-exptype="weekly" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Weekly</button>
+        <button class="exp-type-tab" data-exptype="monthly" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Monthly</button>
+        <button class="exp-type-tab" data-exptype="yearly" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Yearly</button>
       </div>
-      <div id="expensesTableWrap"></div>
+      <div style="flex:1;"></div>
+      <input type="text" id="expensesSearch" placeholder="Search expenses..." style="max-width:200px;">
+      <select id="expensesCategoryFilter" style="font-size:12px;padding:6px 10px;max-width:150px;">
+        <option value="">All categories</option>
+      </select>
+      <div style="display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px;">
+        <button class="exp-view-tab active" data-expview="list" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">≡ List</button>
+        <button class="exp-view-tab" data-expview="table" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊞ Table</button>
+        <button class="exp-view-tab" data-expview="grouped" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊟ Grouped</button>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:0;">
+      <div id="expensesTableWrap" style="padding:0 20px;"></div>
+    </div>
+
+    <!-- Total footer bar -->
+    <div style="position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:10px 20px;display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);">
+      <span id="expensesFooterCount">0 expenses</span>
+      <span>Recurring paid this month: <strong id="expensesFooterRecurring" style="color:var(--text-primary);">£0.00</strong></span>
     </div>
   </div>
 
@@ -1056,6 +1188,77 @@
         </div>
       </div>
       <div id="incomeTableWrap"></div>
+    </div>
+  </div>
+
+  <div class="page" id="page-tracking">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h1>Tracking</h1>
+        <span id="trackingBadge" style="font-size:12px;font-weight:600;background:var(--indigo-dim);color:var(--indigo);padding:2px 8px;border-radius:99px;">0</span>
+      </div>
+      <button class="btn btn-primary" id="trackParcelBtn" style="white-space:nowrap;">+ Track a parcel</button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-row" id="trackingStatRow" style="margin-bottom:20px;">
+      <div class="stat-card" style="border-top:2px solid var(--indigo);background:linear-gradient(135deg,#6d6df00d 0%,transparent 60%);">
+        <div class="label">Tracked</div>
+        <div class="value" id="trackingStat-total" style="color:var(--indigo);">0</div>
+      </div>
+      <div class="stat-card" style="border-top:2px solid var(--amber);background:linear-gradient(135deg,#f0b35c0d 0%,transparent 60%);">
+        <div class="label">In Transit</div>
+        <div class="value" id="trackingStat-transit" style="color:var(--amber);">0</div>
+      </div>
+      <div class="stat-card" style="border-top:2px solid var(--green);background:linear-gradient(135deg,#2dd4a00d 0%,transparent 60%);">
+        <div class="label">Delivered</div>
+        <div class="value" id="trackingStat-delivered" style="color:var(--green);">0</div>
+      </div>
+      <div class="stat-card" style="border-top:2px solid var(--violet);background:linear-gradient(135deg,#b78cf20d 0%,transparent 60%);">
+        <div class="label">Received</div>
+        <div class="value" id="trackingStat-received" style="color:var(--violet);">0</div>
+      </div>
+    </div>
+
+    <!-- View tabs -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+      <div id="trackingViewTabs" style="display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:10px;">
+        <button class="tracking-view-tab active" data-view="flow" style="padding:5px 14px;font-size:12px;border:none;border-radius:7px;cursor:pointer;background:var(--indigo);color:#fff;font-weight:600;">⬡ Flow</button>
+        <button class="tracking-view-tab" data-view="list" style="padding:5px 14px;font-size:12px;border:none;border-radius:7px;cursor:pointer;background:transparent;color:var(--text-secondary);">≡ List</button>
+        <button class="tracking-view-tab" data-view="grouped" style="padding:5px 14px;font-size:12px;border:none;border-radius:7px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊞ Grouped</button>
+      </div>
+      <div style="flex:1;"></div>
+      <input type="text" id="trackingSearch" placeholder="Search parcels..." style="max-width:220px;">
+      <button class="btn" id="refreshTrackingBtn">⟳ Refresh</button>
+    </div>
+
+    <!-- Track a parcel modal -->
+    <div id="trackParcelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:420px;max-width:90vw;">
+        <div style="font-size:16px;font-weight:700;margin-bottom:20px;">Track a parcel</div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;">Tracking number</label>
+          <input type="text" id="manualTrackingNum" placeholder="e.g. AB123456789GB" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;">Label (optional)</label>
+          <input type="text" id="manualTrackingLabel" placeholder="e.g. Topps order" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn" id="cancelTrackParcel">Cancel</button>
+          <button class="btn btn-primary" id="confirmTrackParcel">Track</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:0;">
+      <div id="trackingWrap" style="padding:20px;">
+        <div class="empty-state" style="padding:60px;">
+          <div style="font-size:32px;margin-bottom:12px;">📦</div>
+          <div>No parcels yet</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">Add a tracking number to an order, or track a parcel directly.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1443,6 +1646,275 @@
   // ============================================================
   var BACKUP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4e_1inv-Pg0N48ZXKt9rIli74R5e4Q9OsaZwRfSYpxRv4s3cvXTB4gMDDvOVrDuI/exec';
 
+  // ============================================================
+  // TRACKING — carrier API credentials and config
+  // ============================================================
+  var ROYAL_MAIL_CLIENT_ID     = 'e92a904b3bdd0918354f5f1d6a76aaf9';
+  var ROYAL_MAIL_CLIENT_SECRET = '82f1bf613f84cafabce1aedc743afc1f';
+  var DHL_API_KEY              = 'kcsi2GQuj7wsEEiWVeHhktrxEYEqGiEA';
+  var _royalMailToken = null;
+  var _royalMailTokenExpiry = 0;
+
+  // Carrier detection by tracking number format
+  var CARRIER_PATTERNS = [
+    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}GB$/i,          color: '#e60026', track: null }, // uses API
+    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/i,    color: '#e60026', track: null },
+    { carrier: 'Evri',        regex: /^[HJ][0-9A-Z]{15,}$/i,         color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
+    { carrier: 'Evri',        regex: /^[A-Z]{3}\d{9}$/i,             color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
+    { carrier: 'DHL',         regex: /^\d{10,11}$/,                   color: '#ffcc00', track: 'api' },
+    { carrier: 'DHL',         regex: /^JD\d{18}$/i,                   color: '#ffcc00', track: 'api' },
+    { carrier: 'UPS',         regex: /^1Z[A-Z0-9]{16}$/i,            color: '#351c15', track: 'https://www.ups.com/track?tracknum={n}' },
+    { carrier: 'DPD',         regex: /^\d{14,15}$/,                   color: '#dc0032', track: 'https://www.dpd.co.uk/service/track?parcelNumber={n}' },
+    { carrier: 'ParcelForce', regex: /^[A-Z]{2}\d{7}$/i,             color: '#003087', track: 'https://www.parcelforce.com/track-trace?trackNumber={n}' },
+    { carrier: 'Amazon',      regex: /^TBA\d{12}$/i,                  color: '#ff9900', track: 'https://www.amazon.co.uk/progress-tracker?ref=pe_2025041_233263010&orderID={n}' },
+    { carrier: 'Yodel',       regex: /^JJD\d{18}$/i,                  color: '#00aeef', track: 'https://www.yodel.co.uk/tracking/{n}' },
+  ];
+
+  function detectCarrier(trackingNum) {
+    if(!trackingNum) return null;
+    var n = trackingNum.trim();
+    for(var i = 0; i < CARRIER_PATTERNS.length; i++){
+      if(CARRIER_PATTERNS[i].regex.test(n)) return CARRIER_PATTERNS[i];
+    }
+    return { carrier: 'Unknown', color: '#888', track: null };
+  }
+
+  async function getRoyalMailToken() {
+    if(_royalMailToken && Date.now() < _royalMailTokenExpiry) return _royalMailToken;
+    try {
+      var res = await fetch('https://api.royalmail.net/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=client_credentials&client_id=' + ROYAL_MAIL_CLIENT_ID + '&client_secret=' + ROYAL_MAIL_CLIENT_SECRET
+      });
+      var data = await res.json();
+      if(data.access_token){
+        _royalMailToken = data.access_token;
+        _royalMailTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
+        return _royalMailToken;
+      }
+    } catch(e) { console.warn('Royal Mail token error:', e); }
+    return null;
+  }
+
+  async function fetchRoyalMailStatus(trackingNum) {
+    try {
+      var token = await getRoyalMailToken();
+      if(!token) return null;
+      var res = await fetch('https://api.royalmail.net/shipping/v3/trackings/' + encodeURIComponent(trackingNum), {
+        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+      });
+      if(!res.ok) return null;
+      var data = await res.json();
+      if(data && data.mailPieces && data.mailPieces[0]){
+        var mp = data.mailPieces[0];
+        var events = mp.events || [];
+        var latest = events[0];
+        return {
+          status: mp.summary && mp.summary.statusDescription || 'Unknown',
+          location: latest && latest.locationName || '',
+          timestamp: latest && latest.eventDateTime || '',
+          events: events.slice(0, 5)
+        };
+      }
+    } catch(e) { console.warn('Royal Mail tracking error:', e); }
+    return null;
+  }
+
+  async function fetchDHLStatus(trackingNum) {
+    try {
+      var res = await fetch('https://api-eu.dhl.com/track/shipments?trackingNumber=' + encodeURIComponent(trackingNum), {
+        headers: {
+          'DHL-API-Key': DHL_API_KEY,
+          'Accept': 'application/json'
+        }
+      });
+      if(!res.ok) return null;
+      var data = await res.json();
+      if(data && data.shipments && data.shipments[0]){
+        var ship = data.shipments[0];
+        var events = ship.events || [];
+        var latest = events[0];
+        return {
+          status: ship.status && ship.status.description || (latest && latest.description) || 'Unknown',
+          location: latest && latest.location && latest.location.address && latest.location.address.addressLocality || '',
+          timestamp: latest && latest.timestamp ? latest.timestamp.slice(0,10) : '',
+          events: events.slice(0, 5).map(function(ev){
+            return {
+              eventDateTime: ev.timestamp ? ev.timestamp.slice(0,16).replace('T',' ') : '',
+              eventDescription: ev.description || ''
+            };
+          })
+        };
+      }
+    } catch(e) { console.warn('DHL tracking error:', e); }
+    return null;
+  }
+
+  function getTrackingLink(trackingNum, carrierInfo) {
+    if(!carrierInfo) return null;
+    if(carrierInfo.carrier === 'DHL'){
+      return 'https://www.dhl.com/gb-en/home/tracking.html?tracking-id=' + encodeURIComponent(trackingNum);
+    }
+    if(!carrierInfo.track || carrierInfo.track === 'api') return null;
+    return carrierInfo.track.replace('{n}', encodeURIComponent(trackingNum));
+  }
+
+  function statusBadgeHtml(status) {
+    var s = (status || '').toLowerCase();
+    var color = 'var(--text-muted)', bg = 'var(--surface-2)';
+    if(s.includes('deliver') || s.includes('arrived')) { color = 'var(--green)'; bg = 'var(--green-dim)'; }
+    else if(s.includes('transit') || s.includes('progress') || s.includes('dispatch') || s.includes('sort')) { color = 'var(--amber)'; bg = 'var(--amber-dim)'; }
+    else if(s.includes('out for') || s.includes('with courier')) { color = 'var(--indigo)'; bg = 'var(--indigo-dim)'; }
+    else if(s.includes('exception') || s.includes('failed') || s.includes('return')) { color = 'var(--red)'; bg = 'var(--red-dim)'; }
+    return '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:'+bg+';color:'+color+';">'+escapeHtml(status||'Unknown')+'</span>';
+  }
+
+  var _trackingView = 'flow';
+  var _manualTrackingNumbers = []; // [{num, label}] added via "+ Track a parcel"
+
+  async function renderTrackingPage() {
+    var wrap = document.getElementById('trackingWrap');
+    if(!wrap) return;
+
+    var search = (document.getElementById('trackingSearch') ? document.getElementById('trackingSearch').value : '').toLowerCase();
+
+    // Gather tracking numbers from entries
+    var tracked = [];
+    entries.forEach(function(e){
+      var tn = (e.trackingNumber || '').trim();
+      if(!tn){
+        // Try to detect from notes
+        var m = ((e.notes||'')).match(/\b([A-Z]{2}\d{9}[A-Z]{2}|JD\d{18}|1Z[A-Z0-9]{16}|TBA\d{12}|[HJ][0-9A-Z]{15,})\b/i);
+        if(m) tn = m[1];
+      }
+      if(tn) tracked.push({ num: tn, label: e.item, entryId: e.id });
+    });
+
+    // Add manually tracked parcels
+    _manualTrackingNumbers.forEach(function(m){
+      tracked.push({ num: m.num, label: m.label || m.num, entryId: null });
+    });
+
+    // Deduplicate by tracking number
+    var seen = {};
+    tracked = tracked.filter(function(t){ return seen[t.num] ? false : (seen[t.num] = true); });
+
+    // Apply search filter
+    if(search) tracked = tracked.filter(function(t){
+      return t.label.toLowerCase().indexOf(search) !== -1 || t.num.toLowerCase().indexOf(search) !== -1;
+    });
+
+    // Update badge
+    var badge = document.getElementById('trackingBadge');
+    if(badge) badge.textContent = tracked.length;
+
+    if(!tracked.length){
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">' +
+        '<div style="font-size:32px;margin-bottom:12px;">📦</div>' +
+        '<div>No parcels yet</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:8px;">Add a tracking number to an order, or click "+ Track a parcel".</div>' +
+        '</div>';
+      return;
+    }
+
+    wrap.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">Fetching live data for ' + tracked.length + ' shipment(s)...</div>';
+
+    // Fetch statuses in parallel
+    var results = await Promise.all(tracked.map(async function(t){
+      var carrierInfo = detectCarrier(t.num);
+      var status = null;
+      if(carrierInfo && carrierInfo.carrier === 'Royal Mail') status = await fetchRoyalMailStatus(t.num);
+      else if(carrierInfo && carrierInfo.carrier === 'DHL') status = await fetchDHLStatus(t.num);
+      return { t: t, carrier: carrierInfo, status: status };
+    }));
+
+    // Update stat cards
+    var total = results.length;
+    var inTransit = 0, delivered = 0, received = 0;
+    results.forEach(function(r){
+      if(!r.status) return;
+      var s = (r.status.status || '').toLowerCase();
+      if(s.includes('deliver')) delivered++;
+      else if(s.includes('transit') || s.includes('progress') || s.includes('dispatch') || s.includes('sort') || s.includes('out for')) inTransit++;
+      else if(s.includes('receiv') || s.includes('collect')) received++;
+    });
+    var el = function(id){ return document.getElementById(id); };
+    if(el('trackingStat-total'))     el('trackingStat-total').textContent = total;
+    if(el('trackingStat-transit'))   el('trackingStat-transit').textContent = inTransit;
+    if(el('trackingStat-delivered')) el('trackingStat-delivered').textContent = delivered;
+    if(el('trackingStat-received'))  el('trackingStat-received').textContent = received;
+
+    // Render based on view
+    if(_trackingView === 'grouped') {
+      var byCarrier = {};
+      results.forEach(function(r){ var c = r.carrier ? r.carrier.carrier : 'Unknown'; if(!byCarrier[c]) byCarrier[c] = []; byCarrier[c].push(r); });
+      wrap.innerHTML = Object.keys(byCarrier).map(function(c){
+        return '<div style="margin-bottom:20px;">' +
+          '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px;">'+escapeHtml(c)+' ('+byCarrier[c].length+')</div>' +
+          byCarrier[c].map(function(r){ return trackingRowHtml(r); }).join('') +
+          '</div>';
+      }).join('');
+    } else if(_trackingView === 'list') {
+      wrap.innerHTML = '<table style="width:100%;table-layout:fixed;"><thead><tr>' +
+        '<th style="width:200px;">Item</th><th style="width:140px;">Tracking #</th><th style="width:100px;">Carrier</th><th>Status</th><th style="width:100px;">Updated</th><th style="width:80px;"></th>' +
+        '</tr></thead><tbody>' +
+        results.map(function(r){
+          var link = getTrackingLink(r.t.num, r.carrier);
+          return '<tr>' +
+            '<td>'+escapeHtml(r.t.label)+'</td>' +
+            '<td style="font-size:11px;color:var(--text-muted);">'+escapeHtml(r.t.num)+'</td>' +
+            '<td><span style="color:'+(r.carrier?r.carrier.color:'#888')+';">'+escapeHtml(r.carrier?r.carrier.carrier:'Unknown')+'</span></td>' +
+            '<td>'+(r.status ? statusBadgeHtml(r.status.status) : statusBadgeHtml('No data'))+'</td>' +
+            '<td style="font-size:11px;color:var(--text-muted);">'+(r.status&&r.status.timestamp?r.status.timestamp.slice(0,10):'—')+'</td>' +
+            '<td>'+(link?'<a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none;">Track</a>':'')+'</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table>';
+    } else {
+      // Flow view — card layout
+      wrap.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">' +
+        results.map(function(r){ return trackingCardHtml(r); }).join('') +
+        '</div>';
+    }
+  }
+
+  function trackingRowHtml(r) {
+    var link = getTrackingLink(r.t.num, r.carrier);
+    var color = r.carrier ? r.carrier.color : '#888';
+    return '<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0;"></div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:600;font-size:13px;">'+escapeHtml(r.t.label)+'</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);">'+escapeHtml(r.t.num)+'</div>' +
+        '<div style="margin-top:4px;">'+(r.status?statusBadgeHtml(r.status.status):statusBadgeHtml('No data'))+'</div>' +
+      '</div>' +
+      (link?'<a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none;">Track →</a>':'') +
+    '</div>';
+  }
+
+  function trackingCardHtml(r) {
+    var link = getTrackingLink(r.t.num, r.carrier);
+    var color = r.carrier ? r.carrier.color : '#888';
+    var carrierName = r.carrier ? r.carrier.carrier : 'Unknown';
+    return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;border-top:2px solid '+color+';">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">' +
+        '<div>' +
+          '<div style="font-weight:600;font-size:13px;margin-bottom:3px;">'+escapeHtml(r.t.label)+'</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);">'+escapeHtml(r.t.num)+'</div>' +
+        '</div>' +
+        '<span style="font-size:11px;font-weight:600;color:'+color+';">'+escapeHtml(carrierName)+'</span>' +
+      '</div>' +
+      '<div style="margin-bottom:10px;">'+(r.status?statusBadgeHtml(r.status.status):statusBadgeHtml('No data'))+(r.status&&r.status.location?' <span style="font-size:11px;color:var(--text-muted);">· '+escapeHtml(r.status.location)+'</span>':'')+'</div>' +
+      (r.status&&r.status.events&&r.status.events.length
+        ? '<div style="font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
+          r.status.events.slice(0,2).map(function(ev){ return '<div style="padding:2px 0;">'+escapeHtml((ev.eventDateTime||'').slice(0,16).replace('T',' '))+' — '+escapeHtml(ev.eventDescription||'')+'</div>'; }).join('') +
+          '</div>'
+        : '') +
+      (link?'<div style="margin-top:12px;"><a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:12px;padding:6px 14px;text-decoration:none;display:inline-block;">Track on '+escapeHtml(carrierName)+' →</a></div>':'') +
+    '</div>';
+  }
+
   window.storage = {
     get: async function(key) {
       try {
@@ -1487,6 +1959,60 @@
       .catch(function(e){ console.warn('Drive backup skipped:', e.message); });
   }
 
+  // ============================================================
+  // Auto-sync — pulls new entries from the Sheet KV store into
+  // localStorage on every page load. Runs silently in background.
+  // New email-scanned orders appear automatically without any
+  // manual restore step.
+  // ============================================================
+  async function syncFromSheet() {
+    try {
+      // Try chunked storage first (large entry sets are split across multiple keys)
+      var metaRes = await fetch(BACKUP_SCRIPT_URL + '?action=get&key=' + encodeURIComponent('inventory:entries:__chunk__meta'), { redirect: 'follow' });
+      var metaData = await metaRes.json();
+      var sheetEntriesRaw = null;
+
+      if(metaData && metaData.value && parseInt(metaData.value) > 0){
+        var numChunks = parseInt(metaData.value);
+        var chunks = await Promise.all(
+          Array.from({length: numChunks}, function(_, i){
+            return fetch(BACKUP_SCRIPT_URL + '?action=get&key=' + encodeURIComponent('inventory:entries:__chunk__' + i), { redirect: 'follow' })
+              .then(function(r){ return r.json(); })
+              .then(function(d){ return d.value || ''; });
+          })
+        );
+        sheetEntriesRaw = chunks.join('');
+      } else {
+        var res = await fetch(BACKUP_SCRIPT_URL + '?action=get&key=' + encodeURIComponent('inventory:entries'), { redirect: 'follow' });
+        var data = await res.json();
+        sheetEntriesRaw = data && data.value ? data.value : null;
+      }
+
+      if(!sheetEntriesRaw) return 0;
+      var sheetEntries = JSON.parse(sheetEntriesRaw);
+      if(!Array.isArray(sheetEntries) || !sheetEntries.length) return 0;
+
+      var localRaw = localStorage.getItem('inventory:entries');
+      var localEntries = [];
+      try { if(localRaw) localEntries = JSON.parse(localRaw); } catch(e){}
+
+      var localIds = {};
+      localEntries.forEach(function(e){ localIds[e.id] = true; });
+      var toAdd = sheetEntries.filter(function(e){ return e.id && !localIds[e.id]; });
+
+      if(toAdd.length > 0){
+        var merged = localEntries.concat(toAdd);
+        localStorage.setItem('inventory:entries', JSON.stringify(merged));
+        console.log('Auto-synced ' + toAdd.length + ' new entries from Sheet.');
+        return toAdd.length;
+      }
+      return 0;
+    } catch(e) {
+      console.warn('Sheet sync skipped:', e.message);
+      return 0;
+    }
+  }
+
   document.querySelectorAll('.nav-item').forEach(function(item){
     item.addEventListener('click', function(){
       var pageId = this.getAttribute('data-page');
@@ -1494,6 +2020,7 @@
       document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
       this.classList.add('active');
       document.getElementById('page-'+pageId).classList.add('active');
+      if(pageId === 'tracking') renderTrackingPage();
     });
   });
 
@@ -1579,7 +2106,12 @@
     }
     try {
       await window.storage.set(STORE_KEY, JSON.stringify(entries), false);
-      // Silently back up to Google Drive after every save
+
+      // Push full backup to Apps Script KV store so any new file version
+      // loads complete data (entries, sales, tickets etc) automatically
+      pushBackupToKV();
+
+      // Also back up to Google Drive
       pushBackupToDrive({
         exportedOn: new Date().toISOString(),
         app: 'SolePlayCollect LTD',
@@ -1596,6 +2128,19 @@
       });
     }
     catch(e){ console.error('Storage error', e); showToast('Could not save — please try again.', true); }
+  }
+
+  // Push entries to Apps Script KV store — runs silently after every save
+  // so any new file version can pull complete data on first load
+  function pushBackupToKV(){
+    if(window.location.protocol === 'file:') return; // skip on local file
+    var url = BACKUP_SCRIPT_URL;
+    fetch(url, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'set', key: 'inventory:entries', value: JSON.stringify(entries) })
+    }).catch(function(e){ console.warn('KV sync skipped:', e.message); });
   }
 
   var PREFS_KEY = 'inventory:prefs';
@@ -1742,6 +2287,12 @@
 
       // Show a two-option dialog instead of the generic confirm
       var overlay = document.getElementById('customConfirmOverlay');
+      if(!overlay){
+        overlay = document.createElement('div');
+        overlay.id = 'customConfirmOverlay';
+        overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;';
+        document.body.appendChild(overlay);
+      }
       overlay.innerHTML =
         '<div class="confirm-box" style="max-width:480px;">' +
           '<div class="confirm-title">Restore from backup</div>' +
@@ -2251,14 +2802,20 @@
     var avgProfitPerOrder = soldOrders ? s.profit / soldOrders : 0;
 
     document.getElementById('analyticsStatRow').innerHTML = [
-      { label: 'Revenue', value: fmtMoney(s.totalSales), color: 'var(--indigo)', bg: 'var(--indigo-dim)' },
-      { label: 'Profit', value: fmtMoneySigned(s.profit), color: s.profit>=0?'var(--green)':'var(--red)', bg: s.profit>=0?'var(--green-dim)':'var(--red-dim)', valueClass: s.profit>=0?'pos':'neg' },
-      { label: 'Orders', value: soldOrders, color: 'var(--violet)', bg: 'var(--violet-dim)' },
-      { label: 'Avg Margin', value: (isFinite(s.margin)?s.margin.toFixed(1):'0.0')+'%', color: 'var(--amber)', bg: 'var(--amber-dim)' },
-      { label: 'Avg Profit / Order', value: fmtMoneySigned(avgProfitPerOrder), color: 'var(--green)', bg: 'var(--green-dim)' }
+      { label: 'Revenue',          value: fmtMoney(s.totalSales),                                    color: 'var(--indigo)', hex: '#6d6df0' },
+      { label: 'Profit',           value: fmtMoneySigned(s.profit),  valueClass: s.profit>=0?'pos':'neg', color: s.profit>=0?'var(--green)':'var(--red)', hex: s.profit>=0?'#2dd4a0':'#f06d6d' },
+      { label: 'Orders',           value: soldOrders,                                                color: 'var(--violet)', hex: '#b78cf2' },
+      { label: 'Avg Margin',       value: (isFinite(s.margin)?s.margin.toFixed(1):'0.0')+'%',        color: 'var(--amber)',  hex: '#f0b35c' },
+      { label: 'Avg Profit / Order', value: fmtMoneySigned(avgProfitPerOrder),                      color: 'var(--green)',  hex: '#2dd4a0' }
     ].map(function(c){
-      return '<div class="stat-card"><div class="icon" style="background:'+c.bg+';color:'+c.color+';"></div>' +
-        '<div class="label">'+c.label+'</div><div class="value '+(c.valueClass||'')+'">'+c.value+'</div></div>';
+      return '<div class="stat-card" style="'+
+        'position:relative; overflow:hidden;'+
+        'border-top: 2px solid '+c.color+';'+
+        'background: linear-gradient(135deg, '+c.hex+'0d 0%, transparent 60%);'+
+      '">' +
+        '<div class="label">'+c.label+'</div>' +
+        '<div class="value '+(c.valueClass||'')+'" style="color:'+c.color+';">'+c.value+'</div>' +
+      '</div>';
     }).join('');
 
     renderAnalyticsRevenueProfitChart(sales);
@@ -2578,94 +3135,77 @@
     var canvas = document.getElementById('constellationCanvas');
     if(!canvas) return;
     var ctx = canvas.getContext('2d');
-    var W, H, stars, lines;
-
-    // Zodiac-inspired constellation patterns — fixed line connections
-    var CONSTELLATIONS = [
-      // Orion-like
-      [[0.1,0.2],[0.15,0.5],[0.2,0.7],[0.25,0.5],[0.3,0.2],[0.35,0.4],[0.18,0.35]],
-      // Big dipper-like
-      [[0.5,0.1],[0.58,0.15],[0.65,0.12],[0.72,0.2],[0.7,0.35],[0.62,0.4],[0.55,0.38]],
-      // Cassiopeia-like
-      [[0.75,0.6],[0.8,0.4],[0.85,0.55],[0.9,0.35],[0.95,0.5]]
-    ];
+    var W, H;
 
     function init(){
       W = canvas.width = canvas.offsetWidth;
       H = canvas.height = canvas.offsetHeight;
-      stars = [];
-      lines = [];
-
-      // Create stars from constellation patterns
-      CONSTELLATIONS.forEach(function(pattern){
-        var groupStars = pattern.map(function(p, i){
-          return {
-            x: p[0] * W, y: p[1] * H,
-            baseX: p[0] * W, baseY: p[1] * H,
-            r: Math.random() * 1.2 + 0.6,
-            brightness: Math.random() * 0.5 + 0.5,
-            twinkleSpeed: Math.random() * 0.02 + 0.005,
-            twinkleOffset: Math.random() * Math.PI * 2,
-            driftX: (Math.random() - 0.5) * 0.08,
-            driftY: (Math.random() - 0.5) * 0.04,
-            groupIdx: stars.length + i
-          };
-        });
-        // Connect stars in sequence within each constellation
-        for(var i = 0; i < groupStars.length - 1; i++){
-          lines.push([groupStars[i], groupStars[i+1]]);
-        }
-        // Add one cross-connection for visual interest
-        if(groupStars.length > 3) lines.push([groupStars[0], groupStars[2]]);
-        stars = stars.concat(groupStars);
-      });
-
-      // Add background scattered stars
-      for(var i = 0; i < 40; i++){
-        stars.push({
-          x: Math.random() * W, y: Math.random() * H,
-          baseX: null, baseY: null,
-          r: Math.random() * 0.7 + 0.3,
-          brightness: Math.random() * 0.3 + 0.1,
-          twinkleSpeed: Math.random() * 0.015 + 0.003,
-          twinkleOffset: Math.random() * Math.PI * 2,
-          driftX: 0, driftY: 0,
-          groupIdx: -1
-        });
-      }
     }
 
     var t = 0;
+
+    // Aurora layers — each has its own colour, speed, amplitude and phase offset
+    var LAYERS = [
+      { color: '109,109,240', speed: 0.0004, amp: 0.28, freq: 1.8, phase: 0,    yBase: 0.3,  width: 0.55 },
+      { color: '45,212,160',  speed: 0.0006, amp: 0.22, freq: 2.3, phase: 1.1,  yBase: 0.5,  width: 0.45 },
+      { color: '178,140,242', speed: 0.0003, amp: 0.32, freq: 1.4, phase: 2.4,  yBase: 0.2,  width: 0.6  },
+      { color: '80,200,220',  speed: 0.0005, amp: 0.18, freq: 2.8, phase: 0.7,  yBase: 0.65, width: 0.4  },
+      { color: '130,100,240', speed: 0.00035,amp: 0.25, freq: 1.6, phase: 3.1,  yBase: 0.4,  width: 0.5  }
+    ];
+
     function draw(){
       ctx.clearRect(0, 0, W, H);
-      t += 0.01;
+      t++;
 
-      // Determine star color from current theme
-      var isDark = !document.body.classList.contains('light-mode');
-      var starColor = isDark ? '180,180,220' : '80,80,140';
+      LAYERS.forEach(function(layer){
+        var phaseShift = t * layer.speed * Math.PI * 2;
+        var yCenter = layer.yBase * H;
+        var amplitude = layer.amp * H;
+        var bandH = layer.width * H;
 
-      // Update constellation star positions (slow drift)
-      stars.forEach(function(s){
-        if(s.baseX !== null){
-          s.x = s.baseX + Math.sin(t * 0.3 + s.twinkleOffset) * s.driftX * W;
-          s.y = s.baseY + Math.cos(t * 0.2 + s.twinkleOffset) * s.driftY * H;
+        // Draw the aurora band as a filled path
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+
+        // Top edge — sinusoidal wave
+        for(var x = 0; x <= W; x += 3){
+          var nx = x / W;
+          var y = yCenter + Math.sin(nx * Math.PI * layer.freq + phaseShift + layer.phase) * amplitude
+                          + Math.sin(nx * Math.PI * layer.freq * 2.1 + phaseShift * 0.7) * amplitude * 0.3;
+          if(x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
         }
-        var twinkle = 0.5 + 0.5 * Math.sin(t * s.twinkleSpeed * 60 + s.twinkleOffset);
-        var alpha = s.brightness * (0.6 + 0.4 * twinkle);
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba('+starColor+','+alpha+')';
-        ctx.fill();
-      });
 
-      // Draw constellation lines
-      lines.forEach(function(l){
-        var lineAlpha = isDark ? 0.12 : 0.08;
+        // Bottom edge — offset wave going back
+        for(var x = W; x >= 0; x -= 3){
+          var nx = x / W;
+          var y = yCenter + bandH + Math.sin(nx * Math.PI * layer.freq + phaseShift + layer.phase + 0.8) * amplitude * 0.6;
+          ctx.lineTo(x, y);
+        }
+
+        ctx.closePath();
+
+        // Gradient fill — bright in centre, fades to edges
+        var grad = ctx.createLinearGradient(0, yCenter - amplitude, 0, yCenter + bandH + amplitude);
+        grad.addColorStop(0,   'rgba('+layer.color+', 0)');
+        grad.addColorStop(0.3, 'rgba('+layer.color+', 0.12)');
+        grad.addColorStop(0.5, 'rgba('+layer.color+', 0.18)');
+        grad.addColorStop(0.7, 'rgba('+layer.color+', 0.12)');
+        grad.addColorStop(1,   'rgba('+layer.color+', 0)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Bright leading edge line
         ctx.beginPath();
-        ctx.moveTo(l[0].x, l[0].y);
-        ctx.lineTo(l[1].x, l[1].y);
-        ctx.strokeStyle = 'rgba('+starColor+','+lineAlpha+')';
-        ctx.lineWidth = 0.5;
+        for(var x = 0; x <= W; x += 3){
+          var nx = x / W;
+          var y = yCenter + Math.sin(nx * Math.PI * layer.freq + phaseShift + layer.phase) * amplitude
+                          + Math.sin(nx * Math.PI * layer.freq * 2.1 + phaseShift * 0.7) * amplitude * 0.3;
+          if(x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = 'rgba('+layer.color+', 0.35)';
+        ctx.lineWidth = 1;
         ctx.stroke();
       });
 
@@ -2720,9 +3260,28 @@
       { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' }
     ];
 
-    document.getElementById('overviewStatRow').innerHTML = cards.map(function(c){
-      return '<div class="stat-card" style="min-height:108px;">' +
-        '<div class="icon" style="background:'+c.bg+';color:'+c.color+';"></div>' +
+    var ICONS = [
+      'M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2M8 4v4h8V4M8 4h8M9 14l2 2 4-4',
+      'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+      'M15 6a4 4 0 0 0-8 0v3H5m2 0h10M7 9v6m0 0H5m2 0h10',
+      'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
+    ];
+
+    document.getElementById('overviewStatRow').innerHTML = cards.map(function(c, i){
+      var dashLen = 49; var gapLen = 93;
+      return '<div class="stat-card" style="cursor:pointer;min-height:108px;" data-go-tab="'+c.goTab+'">' +
+        '<div class="icon">' +
+          '<div class="icon-inner">' +
+            '<svg class="icon-svg-wrap" viewBox="0 0 44 44" fill="none">' +
+              '<rect x="2" y="2" width="40" height="40" rx="10" fill="'+c.bg+'" stroke="'+c.color+'" stroke-opacity="0.2" stroke-width="1.5"/>' +
+              '<rect class="icon-ring" x="2" y="2" width="40" height="40" rx="10" fill="none" stroke="'+c.color+'" stroke-width="2.5" stroke-dasharray="'+dashLen+' '+gapLen+'" stroke-linecap="round"/>' +
+            '</svg>' +
+            (i === 2
+              ? '<svg class="icon-symbol" viewBox="0 0 24 24" width="22" height="22"><text x="12" y="17" text-anchor="middle" font-size="17" font-weight="700" fill="'+c.color+'" font-family="system-ui,sans-serif">£</text></svg>'
+              : '<svg class="icon-symbol" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="'+c.color+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="'+ICONS[i]+'"/></svg>'
+            ) +
+          '</div>' +
+        '</div>' +
         '<div class="label">'+c.label+'</div>' +
         '<div class="value '+(c.valueClass||'')+'">'+c.value+'</div>' +
         '<div class="sub">'+c.sub+'</div>' +
@@ -2867,20 +3426,102 @@
     }).join('');
   }
 
+  var activityFilter = 'orders'; // 'orders' | 'sales' | 'preorders'
+
   function renderOverviewActivity(){
     var wrap = document.getElementById('overviewActivityWrap');
-    var recentOrders = entries.filter(function(e){ return e.type === 'purchase'; }).slice().sort(function(a,b){ return b.purchasedOn.localeCompare(a.purchasedOn); }).slice(0,8);
 
-    if(!recentOrders.length){
-      wrap.innerHTML = '<div class="empty-state" style="padding:60px 10px;">No active orders.</div>';
-      return;
+    // Gather entries per type
+    var recentOrders = entries.filter(function(e){
+      return e.type === 'purchase' && (effectiveStatus(e) === 'Pending' || effectiveStatus(e) === 'Received' || effectiveStatus(e) === 'Listed');
+    }).slice().sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); }).slice(0,8);
+
+    var recentSales = entries.filter(function(e){ return e.type === 'sale'; })
+      .slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }).slice(0,8);
+
+    var recentPreorders = entries.filter(function(e){
+      return e.type === 'purchase' && (effectiveStatus(e) === 'Pre-ordered' || effectiveStatus(e) === 'Pre-sale');
+    }).slice().sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); }).slice(0,8);
+
+    // Status badge colours
+    var STATUS_COLORS = {
+      'Pending':    { c:'var(--amber)',  bg:'var(--amber-dim)'  },
+      'Received':   { c:'var(--green)',  bg:'var(--green-dim)'  },
+      'Listed':     { c:'var(--indigo)', bg:'var(--indigo-dim)' },
+      'Pre-ordered':{ c:'var(--violet)', bg:'var(--violet-dim)' },
+      'Pre-sale':   { c:'var(--violet)', bg:'var(--violet-dim)' },
+      'Cancelled':  { c:'var(--red)',    bg:'var(--red-dim)'    },
+      'In Hand':    { c:'var(--green)',  bg:'var(--green-dim)'  },
+      'Paid':       { c:'var(--green)',  bg:'var(--green-dim)'  }
+    };
+
+    function badge(label){
+      var s = STATUS_COLORS[label] || { c:'var(--text-muted)', bg:'var(--surface-2)' };
+      return '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:'+s.bg+';color:'+s.c+';">'+escapeHtml(label)+'</span>';
     }
-    wrap.innerHTML = recentOrders.map(function(e){
-      return '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;">' +
-        '<span><span class="dot" style="background:var(--amber); margin-right:8px;"></span>'+escapeHtml(e.item)+'</span>' +
-        '<span style="color:var(--text-muted);">'+fmtDateUK(e.purchasedOn)+'</span>' +
+
+    function orderRow(e, idx){
+      var itemId = getItemId(e.item) || ('O-'+ String(idx+1).padStart(3,'0'));
+      var prefix = itemId.replace(/(\D+)-(\d+)/, function(_,p,n){ return '<span style="color:var(--amber);font-weight:700;">'+p+'</span><span style="color:var(--text-muted);">-'+n+'</span>'; });
+      var st = effectiveStatus(e);
+      var statusLabel = st === 'Received' ? 'In Hand' : st;
+      var sub = [e.site, fmtDateUK(e.purchasedOn||e.date)].filter(Boolean).join(' · ');
+      return '<div style="padding:12px 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">'+prefix+'</div>' +
+          '<div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+escapeHtml(e.item)+'</div>' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">'+escapeHtml(sub)+'</div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">'+badge(statusLabel)+'</div>' +
       '</div>';
-    }).join('');
+    }
+
+    function saleRow(e, idx){
+      var itemId = 'S-'+String(idx+1).padStart(3,'0');
+      var prefix = '<span style="color:var(--green);font-weight:700;">S</span><span style="color:var(--text-muted);">-'+String(idx+1).padStart(3,'0')+'</span>';
+      var netProfit = netProfitForSale(e);
+      var profitStr = netProfit !== null ? fmtMoneySigned(netProfit) : fmtMoneySigned(saleRevenue(e));
+      var profitColor = (netProfit !== null ? netProfit : saleRevenue(e)) >= 0 ? 'var(--green)' : 'var(--red)';
+      var sub = [e.platform, fmtDateUK(e.date)].filter(Boolean).join(' · ');
+      return '<div style="padding:12px 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">'+prefix+'</div>' +
+          '<div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+escapeHtml(e.item)+'</div>' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">'+escapeHtml(sub)+'</div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
+          '<span style="font-weight:600; font-size:13px; color:'+profitColor+';">'+profitStr+'</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function preorderRow(e, idx){
+      var itemId = getItemId(e.item) || ('ITM-'+String(idx+1).padStart(3,'0'));
+      var prefix = itemId.replace(/(\D+)-(\d+)/, function(_,p,n){ return '<span style="color:var(--violet);font-weight:700;">'+p+'</span><span style="color:var(--text-muted);">-'+n+'</span>'; });
+      var paidLabel = e.paidStatus ? 'Paid' : 'Unpaid';
+      var sub = [e.site, fmtDateUK(e.releaseDate||e.purchasedOn||e.date)].filter(Boolean).join(' · ');
+      return '<div style="padding:12px 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">'+prefix+'</div>' +
+          '<div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'+escapeHtml(e.item)+'</div>' +
+          '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">'+escapeHtml(sub)+'</div>' +
+        '</div>' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">'+badge(paidLabel)+'</div>' +
+      '</div>';
+    }
+
+    var rows = '';
+    var current = activityFilter === 'sales' ? recentSales : activityFilter === 'preorders' ? recentPreorders : recentOrders;
+    if(!current.length){
+      rows = '<div style="padding:40px 0; text-align:center; color:var(--text-muted); font-size:13px;">No recent activity</div>';
+    } else if(activityFilter === 'sales'){
+      rows = recentSales.map(saleRow).join('');
+    } else if(activityFilter === 'preorders'){
+      rows = recentPreorders.map(preorderRow).join('');
+    } else {
+      rows = recentOrders.map(orderRow).join('');
+    }
+    wrap.innerHTML = rows;
   }
 
   function renderAll(){
@@ -3364,7 +4005,12 @@
       purchases = purchases.filter(function(e){ return effectiveStatus(e) === ordersStatusFilter; });
     }
     if(search){
-      purchases = purchases.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
+      purchases = purchases.filter(function(e){
+        return e.item.toLowerCase().indexOf(search) !== -1 ||
+               String(e.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
+               String(e.site||'').toLowerCase().indexOf(search) !== -1 ||
+               String(e.email||'').toLowerCase().indexOf(search) !== -1;
+      });
     }
     purchases = applySortState('orders', purchases, {
       item:        function(a,b){ return compareText(a.item,b.item); },
@@ -3866,7 +4512,8 @@
         { key: 'purchasedOn', label: 'Date purchased',    kind: 'date' },
         { key: 'cardUsed',    label: 'Card used',         kind: 'select',   options: function(){ return lists.cards; } },
         { key: 'email',       label: 'Email used',        kind: 'select',   options: function(){ return lists.emails; } },
-        { key: 'orderNumber', label: 'Order number',      kind: 'text',     placeholder: '—' },
+        { key: 'orderNumber',   label: 'Order number',      kind: 'text',     placeholder: '—' },
+        { key: 'trackingNumber',label: 'Tracking number',   kind: 'text',     placeholder: 'e.g. AB123456789GB' },
         { key: 'postage',     label: 'Postage paid',      kind: 'number',   placeholder: '0.00', step: '0.01' },
         { key: 'releaseDate', label: 'Expected arrival',  kind: 'date' },
         { key: 'notes',       label: 'Notes',             kind: 'text',     placeholder: '—' }
@@ -3905,18 +4552,18 @@
       ]
     },
     expense: {
-      title: 'Add expense',
+      title: 'Add Expense',
       type: 'expense',
       fields: [
-        { key: 'item', label: 'Description', kind: 'text', placeholder: 'e.g. Poly mailers (100 pack)', required: true },
-        { key: 'recurrence', label: 'Type', kind: 'select', options: ['One-off','Recurring'], default: 'One-off' },
-        { key: 'date', label: 'Date', kind: 'date' },
-        { key: 'category', label: 'Category', kind: 'select', options: function(){ return EXPENSE_CATEGORIES; } },
-        { key: 'qty', label: 'Qty', kind: 'number', placeholder: '1', default: '1' },
-        { key: 'price', label: 'Amount (each)', kind: 'number', placeholder: '0.00', step: '0.01' },
-        { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
-        { key: 'email', label: 'Email used', kind: 'select', options: function(){ return lists.emails; } },
-        { key: 'notes', label: 'Notes', kind: 'text', placeholder: '—' }
+        { key: 'date',       label: 'Date',          kind: 'date',     required: true },
+        { key: 'category',   label: 'Category',      kind: 'select',   options: function(){ return EXPENSE_CATEGORIES; } },
+        { key: 'item',       label: 'Title',         kind: 'text',     placeholder: 'What did you spend on?', required: true },
+        { key: 'price',      label: 'Amount',        kind: 'number',   placeholder: '0.00', step: '0.01' },
+        { key: 'qty',        label: 'Quantity',      kind: 'number',   placeholder: '1', default: '1' },
+        { key: 'recurrence', label: 'Expense Type',  kind: 'select',   options: ['One-off','Weekly','Monthly','Yearly'], default: 'One-off' },
+        { key: 'cardUsed',   label: 'Paid With',     kind: 'select',   options: function(){ return lists.cards; } },
+        { key: 'email',      label: 'Email / Source',kind: 'select',   options: function(){ return lists.emails; } },
+        { key: 'notes',      label: 'Notes',         kind: 'text',     placeholder: 'Optional notes...' }
       ]
     },
     income: {
@@ -4275,6 +4922,41 @@
   document.getElementById('addSaleBtn').addEventListener('click', function(){ openAddModal('sale'); });
 
   document.getElementById('ordersSearch').addEventListener('input', renderOrdersTable);
+
+  // Tracking page
+  document.getElementById('refreshTrackingBtn').addEventListener('click', renderTrackingPage);
+  document.getElementById('trackingSearch').addEventListener('input', renderTrackingPage);
+
+  document.getElementById('trackParcelBtn').addEventListener('click', function(){
+    document.getElementById('trackParcelModal').style.display = 'flex';
+    document.getElementById('manualTrackingNum').focus();
+  });
+  document.getElementById('cancelTrackParcel').addEventListener('click', function(){
+    document.getElementById('trackParcelModal').style.display = 'none';
+  });
+  document.getElementById('confirmTrackParcel').addEventListener('click', function(){
+    var num = document.getElementById('manualTrackingNum').value.trim();
+    var label = document.getElementById('manualTrackingLabel').value.trim();
+    if(!num){ showToast('Please enter a tracking number.', true); return; }
+    _manualTrackingNumbers.push({ num: num, label: label || num });
+    document.getElementById('trackParcelModal').style.display = 'none';
+    document.getElementById('manualTrackingNum').value = '';
+    document.getElementById('manualTrackingLabel').value = '';
+    renderTrackingPage();
+  });
+
+  document.getElementById('trackingViewTabs').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-view]');
+    if(!btn) return;
+    _trackingView = btn.getAttribute('data-view');
+    document.querySelectorAll('.tracking-view-tab').forEach(function(t){
+      var active = t.getAttribute('data-view') === _trackingView;
+      t.style.background = active ? 'var(--indigo)' : 'transparent';
+      t.style.color = active ? '#fff' : 'var(--text-secondary)';
+      t.style.fontWeight = active ? '600' : '400';
+    });
+    renderTrackingPage();
+  });
   document.querySelectorAll('#ordersStatusFilter .seg-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('#ordersStatusFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -4285,6 +4967,9 @@
   });
 
   // ---------- Inventory tab ----------
+  var _invPage = 1;
+  var _invPageSize = 25;
+
   function renderInventoryPage(){
     var invTab = document.getElementById('page-inventory');
     if(!invTab) return;
@@ -4293,18 +4978,11 @@
     var statusFilter = invStatusFilter;
     var byItem = {};
     entries.forEach(function(e){
-      // A sale linked to a ticket batch (matchedItem starting TKT-) belongs
-      // on the Tickets tab's own sold/remaining tracking, not Stock — without
-      // this check it would spawn a phantom row here keyed by the raw TKT-id.
       if(e.type === 'sale' && /^TKT-\d+$/.test(e.matchedItem||'')) return;
       var key = (e.type === 'sale' && e.matchedItem) ? e.matchedItem : e.item;
       var st = e.type === 'purchase' ? effectiveStatus(e) : null;
-      // Pre-orders don't belong on Inventory until they actually arrive —
-      // skip them so an item with only pre-order entries doesn't show up
-      // at all here, rather than showing as a confusing 0-stock row.
       if(st === 'Pre-ordered' || st === 'Pre-sale') return;
-
-      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', dateBought: null, buyPrice: 0 };
+      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', dateBought: null, buyPrice: 0, orderNumber: '' };
       var row = byItem[key];
       if(e.type === 'purchase'){
         if(st === 'Received') row.received += e.qty;
@@ -4314,160 +4992,177 @@
         if(e.email) row.email = e.email;
         if(e.cardUsed) row.cardUsed = e.cardUsed;
         if(e.site) row.site = e.site;
-        // Earliest purchase date represents when this item was first bought.
+        if(e.orderNumber) row.orderNumber = e.orderNumber;
         var boughtOn = e.purchasedOn || e.date;
         if(!row.dateBought || boughtOn < row.dateBought) row.dateBought = boughtOn;
         row.buyPrice = e.price;
-      } else {
-        row.soldQty += e.qty;
-      }
+      } else { row.soldQty += e.qty; }
     });
 
-    var rows = Object.values(byItem).filter(function(r){
-      // Pending/Cancelled/Returned belong on Orders, not Inventory
+    var allRows = Object.values(byItem).filter(function(r){
       if(r.lastStatus === 'Pending' || r.lastStatus === 'Cancelled' || r.lastStatus === 'Returned') return false;
       var inStock = r.received + r.listed - r.soldQty;
       if(inStock <= 0 && r.soldQty > 0) return false;
-      return !search || r.item.toLowerCase().indexOf(search) !== -1;
+      return !search || r.item.toLowerCase().indexOf(search) !== -1 ||
+             (r.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
+             (r.site||'').toLowerCase().indexOf(search) !== -1;
     });
-    if(statusFilter !== 'all'){
-      rows = rows.filter(function(r){ return r.lastStatus === statusFilter; });
-    }
-    rows = applySortState('inventory', rows, {
-      item: function(a,b){ return compareText(a.item,b.item); },
-      stock: function(a,b){ return compareNumber(a.received+a.listed-a.soldQty, b.received+b.listed-b.soldQty); },
-      sold: function(a,b){ return compareNumber(a.soldQty,b.soldQty); },
-      status: function(a,b){ return compareText(a.lastStatus,b.lastStatus); },
+    if(statusFilter !== 'all') allRows = allRows.filter(function(r){ return r.lastStatus === statusFilter; });
+    allRows = applySortState('inventory', allRows, {
+      item:       function(a,b){ return compareText(a.item,b.item); },
+      stock:      function(a,b){ return compareNumber(a.received+a.listed-a.soldQty, b.received+b.listed-b.soldQty); },
+      sold:       function(a,b){ return compareNumber(a.soldQty,b.soldQty); },
+      status:     function(a,b){ return compareText(a.lastStatus,b.lastStatus); },
       dateBought: function(a,b){ return compareText(a.dateBought,b.dateBought); },
-      daysHeld: function(a,b){ return compareNumber(daysHeldFor(a.dateBought),daysHeldFor(b.dateBought)); },
-      buyPrice: function(a,b){ return compareNumber(a.buyPrice,b.buyPrice); },
-      site: function(a,b){ return compareText(a.site,b.site); }
+      daysHeld:   function(a,b){ return compareNumber(daysHeldFor(a.dateBought),daysHeldFor(b.dateBought)); },
+      buyPrice:   function(a,b){ return compareNumber(a.buyPrice,b.buyPrice); },
+      site:       function(a,b){ return compareText(a.site,b.site); }
     });
 
-    var totalReceived = Object.values(byItem).reduce(function(s,r){ return s + r.received; }, 0);
-    var activeListings = Object.values(byItem).reduce(function(s,r){ return s + r.listed; }, 0);
-    var totalSold = Object.values(byItem).reduce(function(s,r){ return s + r.soldQty; }, 0);
+    var totalReceived = Object.values(byItem).reduce(function(s,r){ return s+r.received; },0);
+    var activeListings = Object.values(byItem).reduce(function(s,r){ return s+r.listed; },0);
+    var totalSold = Object.values(byItem).reduce(function(s,r){ return s+r.soldQty; },0);
+    var inventoryValue = Object.values(byItem).reduce(function(s,r){
+      return s + Math.max(0, r.received+r.listed-r.soldQty) * r.buyPrice;
+    },0);
 
-    var summaryRow = document.getElementById('invSummaryRow');
-    summaryRow.innerHTML = [
-      { label: 'Received items', value: totalReceived, color: 'var(--indigo)', bg: 'var(--indigo-dim)' },
-      { label: 'Active listings', value: activeListings, color: 'var(--violet)', bg: 'var(--violet-dim)' },
-      { label: 'Sold items', value: totalSold, color: 'var(--green)', bg: 'var(--green-dim)' }
+    document.getElementById('invSummaryRow').innerHTML = [
+      { label: 'Received', value: totalReceived, color: 'var(--indigo)', hex: '#6d6df0' },
+      { label: 'Listed',   value: activeListings,color: 'var(--violet)', hex: '#b78cf2' },
+      { label: 'Sold',     value: totalSold,     color: 'var(--green)',  hex: '#2dd4a0' }
     ].map(function(c){
-      return '<div class="stat-card"><div class="icon" style="background:'+c.bg+';color:'+c.color+';"></div><div class="label">'+c.label+'</div><div class="value">'+c.value+'</div></div>';
+      return '<div class="stat-card" style="border-top:2px solid '+c.color+';background:linear-gradient(135deg,'+c.hex+'0d 0%,transparent 60%);"><div class="label">'+c.label+'</div><div class="value" style="color:'+c.color+';">'+c.value+'</div></div>';
     }).join('');
 
-    document.getElementById('invCountSub').textContent = rows.length + ' of ' + rows.length + ' item' + (rows.length===1?'':'s') + ' currently held';
+    var totalPages = Math.max(1, Math.ceil(allRows.length/_invPageSize));
+    if(_invPage > totalPages) _invPage = totalPages;
+    var pageRows = allRows.slice((_invPage-1)*_invPageSize, _invPage*_invPageSize);
+    document.getElementById('invCountSub').textContent = allRows.length + ' item'+(allRows.length===1?'':'s')+' currently held';
+
     var wrap = document.getElementById('invTableWrap');
+    if(!allRows.length){ wrap.innerHTML = '<div class="empty-state" style="padding:60px;">Nothing currently in stock.</div>'; return; }
 
-    if(!rows.length){
-      wrap.innerHTML = '<div class="empty-state"><div class="icon-big">···</div>Nothing currently in stock. Items fully sold are kept on Sales, not shown here.</div>';
-      return;
-    }
-
-    var statusOptions = ['Received','Listed','Pre-ordered','Pre-sale','Sold','Cancelled','Awaiting Return','Returned','Order Issue'];
+    var STATUS_COLORS = {
+      'Received':      { c:'var(--green)',  bg:'var(--green-dim)',  dot:'#2dd4a0' },
+      'Listed':        { c:'var(--indigo)', bg:'var(--indigo-dim)', dot:'#6d6df0' },
+      'Awaiting Return':{ c:'var(--amber)', bg:'var(--amber-dim)', dot:'#f0b35c' },
+      'Returned':      { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' },
+      'Order Issue':   { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' }
+    };
+    var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue'];
 
     var headerRow = buildSortableHeader('inventory', [
-      { label: 'ID' },
-      { label: 'Item', sortKey: 'item' },
-      { label: 'Status', sortKey: 'status' },
-      { label: 'Date bought', sortKey: 'dateBought' },
-      { label: 'Days held', sortKey: 'daysHeld', cls: 'right' },
-      { label: 'In stock', sortKey: 'stock', cls: 'right' },
-      { label: 'Sold', sortKey: 'sold', cls: 'right' },
-      { label: 'Buy price', sortKey: 'buyPrice', cls: 'right' },
-      { label: 'Site', sortKey: 'site' },
-      { label: 'Email' },
-      { label: 'Card' },
-      { label: '' }
+      { label: 'ID',          width: '70px' },
+      { label: 'Title',       sortKey: 'item',       width: '300px' },
+      { label: 'Status',      sortKey: 'status',     width: '150px' },
+      { label: 'Date Bought', sortKey: 'dateBought', width: '110px' },
+      { label: 'Days Held',   sortKey: 'daysHeld',   width: '90px', cls: 'right' },
+      { label: 'In Stock',    sortKey: 'stock',       width: '80px', cls: 'right' },
+      { label: 'Sold',        sortKey: 'sold',        width: '60px', cls: 'right' },
+      { label: 'Buy Price',   sortKey: 'buyPrice',    width: '100px', cls: 'right' },
+      { label: 'Retailer',    sortKey: 'site',        width: '130px' },
+      { label: '',            width: '120px' }
     ]);
 
-    var tableHtml = '<table><thead>' + headerRow + '</thead><tbody>' +
-      rows.map(function(r, ri){
-        var inStock = r.received + r.listed - r.soldQty;
-        var statusOpts = statusOptions.map(function(s){
-          return '<option value="'+s+'"'+(r.lastStatus===s?' selected':'')+'>'+s+'</option>';
-        }).join('');
+    var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
+      pageRows.map(function(r,ri){
+        var inStock = r.received+r.listed-r.soldQty;
         var daysHeld = daysHeldFor(r.dateBought);
         var itemId = getItemId(r.item);
-
-        // Linked sales badge — shows how many units have a matched sale
-        // so you can spot items needing a status update at a glance.
-        var linkedSaleQty = entries.filter(function(e){
-          return e.type === 'sale' && e.matchedItem === r.item;
-        }).reduce(function(s,e){ return s + e.qty; }, 0);
-        var totalQty = r.received + r.listed + (r.pending || 0);
-        var salesBadge = '';
-        if(linkedSaleQty > 0){
-          var allSold = linkedSaleQty >= totalQty;
-          var badgeColor = allSold ? 'var(--green)' : 'var(--amber)';
-          var badgeBg = allSold ? 'var(--green-dim)' : 'var(--amber-dim)';
-          var badgeLabel = allSold ? '✓ Fully sold' : linkedSaleQty + ' sold';
-          salesBadge = ' <span class="badge" style="background:'+badgeBg+';color:'+badgeColor+';font-size:10px;margin-left:4px;">'+badgeLabel+'</span>';
-        }
-
+        var sc = STATUS_COLORS[r.lastStatus] || { c:'var(--text-muted)', bg:'var(--surface-2)', dot:'#888' };
+        var linkedSaleQty = entries.filter(function(e){ return e.type==='sale' && e.matchedItem===r.item; }).reduce(function(s,e){ return s+e.qty; },0);
+        var salesBadge = linkedSaleQty>0 ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green-dim)':'var(--amber-dim)')+';color:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green)':'var(--amber)')+';">'+(linkedSaleQty>=(r.received+r.listed)?'✓ Fully sold':linkedSaleQty+' sold')+'</span>' : '';
+        var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
+          '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr>' +
-          '<td style="color:var(--text-muted); font-size:11px;">'+itemId+'</td>' +
-          '<td>'+escapeHtml(r.item)+salesBadge+'</td>' +
-          '<td><select data-inv-field="status" data-inv-item="'+escapeAttr(r.item)+'" style="font-size:12px;padding:4px 6px;">'+statusOpts+'</select></td>' +
-          '<td>'+(r.dateBought ? fmtDateUK(r.dateBought) : '—')+'</td>' +
-          '<td class="right">'+(daysHeld !== null ? daysHeld+'d' : '—')+'</td>' +
-          '<td class="right">'+(inStock<0?('<span class="neg">'+inStock+'</span>'):inStock)+'</td>' +
-          '<td class="right">'+r.soldQty+'</td>' +
-          '<td class="right">'+fmtMoney(r.buyPrice)+'</td>' +
-          '<td>'+escapeHtml(r.site || '—')+'</td>' +
-          '<td><select data-inv-field="email" data-inv-item="'+escapeAttr(r.item)+'" style="font-size:12px;padding:4px 6px;">'+emailOptionsHtml(r.email)+'</select></td>' +
-          '<td><select data-inv-field="cardUsed" data-inv-item="'+escapeAttr(r.item)+'" style="font-size:12px;padding:4px 6px;">'+cardOptionsHtml(r.cardUsed)+'</select></td>' +
-          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Delete</button></td>' +
+          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'—')+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
+          '<td>'+statusPill+'</td>' +
+          '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
+          '<td class="right" style="color:var(--text-secondary);font-size:12px;">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
+          '<td class="right" style="font-weight:600;">'+(inStock<0?'<span style="color:var(--red);">'+inStock+'</span>':inStock)+'</td>' +
+          '<td class="right" style="color:var(--text-muted);">'+r.soldQty+'</td>' +
+          '<td class="right" style="font-weight:500;">'+fmtMoney(r.buyPrice)+'</td>' +
+          '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(r.site||'—')+'</td>' +
+          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Del</button></td>' +
         '</tr>';
-      }).join('') +
-      '</tbody></table>';
+      }).join('') + '</tbody></table>';
 
-    wrap.innerHTML = wrapTableForDisplay('inventory', 'Inventory', tableHtml);
+    var paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:4px;">' +
+      '<div style="font-size:12px;color:var(--text-muted);">Inventory value: <strong style="color:var(--green);">'+fmtMoney(inventoryValue)+'</strong></div>' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:12px;color:var(--text-muted);">'+allRows.length+' Items</span>' +
+        '<select id="invPageSizeSelect" style="font-size:12px;padding:4px 8px;width:auto;">' +
+          [25,50,100].map(function(n){ return '<option value="'+n+'"'+(_invPageSize===n?' selected':'')+'>'+n+'</option>'; }).join('') +
+        '</select>' +
+        '<button class="btn" id="invPrevBtn" style="padding:4px 10px;font-size:12px;"'+(_invPage<=1?' disabled':'')+'>‹</button>' +
+        '<span style="font-size:12px;font-weight:600;">'+_invPage+' / '+totalPages+'</span>' +
+        '<button class="btn" id="invNextBtn" style="padding:4px 10px;font-size:12px;"'+(_invPage>=totalPages?' disabled':'')+'>›</button>' +
+      '</div>' +
+    '</div>';
+
+    wrap.innerHTML = wrapTableForDisplay('inventory','Inventory',tableHtml) + paginationHtml;
     wireSortableHeaders(wrap, renderInventoryPage);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.inventory = renderInventoryPage;
 
+    var prev = document.getElementById('invPrevBtn');
+    var next = document.getElementById('invNextBtn');
+    var sz   = document.getElementById('invPageSizeSelect');
+    if(prev) prev.addEventListener('click', function(){ if(_invPage>1){ _invPage--; renderInventoryPage(); }});
+    if(next) next.addEventListener('click', function(){ if(_invPage<totalPages){ _invPage++; renderInventoryPage(); }});
+    if(sz)   sz.addEventListener('change', function(){ _invPageSize=parseInt(this.value); _invPage=1; renderInventoryPage(); });
+
+    wrap.querySelectorAll('.inv-status-pill').forEach(function(pill){
+      pill.addEventListener('click', function(e){
+        e.stopPropagation();
+        var ex = document.getElementById('invStatusDropdown');
+        if(ex){ ex.remove(); return; }
+        var itemName = pill.getAttribute('data-inv-item');
+        var rect = pill.getBoundingClientRect();
+        var dd = document.createElement('div');
+        dd.id = 'invStatusDropdown';
+        dd.style.cssText = 'position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:160px;top:'+(rect.bottom+4)+'px;left:'+rect.left+'px;';
+        statusOptions.forEach(function(s){
+          var sc2 = STATUS_COLORS[s]||{dot:'#888'};
+          var opt = document.createElement('div');
+          opt.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;';
+          opt.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:'+sc2.dot+';"></span>'+escapeHtml(s);
+          opt.onmouseover=function(){this.style.background='var(--surface-2)';};
+          opt.onmouseout=function(){this.style.background='';};
+          opt.addEventListener('click', function(){
+            dd.remove();
+            entries.forEach(function(en){ if(en.type==='purchase'&&en.item===itemName) en.status=s; });
+            saveEntries(); renderInventoryPage(); showToast('Status → '+s);
+          });
+          dd.appendChild(opt);
+        });
+        document.body.appendChild(dd);
+        setTimeout(function(){ document.addEventListener('click',function rm(){ dd.remove(); document.removeEventListener('click',rm); }); },10);
+      });
+    });
+
     wrap.querySelectorAll('[data-edit-row]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var ri = parseInt(this.getAttribute('data-edit-row'), 10);
-        var itemName = rows[ri].item;
-        // Find the most recent purchase entry for this item to edit
-        var entry = entries.filter(function(e){
-          return e.type === 'purchase' && e.item === itemName;
-        }).sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); })[0];
+        var ri = parseInt(this.getAttribute('data-edit-row'));
+        var itemName = pageRows[ri].item;
+        var entry = entries.filter(function(e){ return e.type==='purchase'&&e.item===itemName; })
+          .sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); })[0];
         if(entry) openAddModal('inventoryAdjust', entry);
       });
     });
-
     wrap.querySelectorAll('[data-delete-item]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var itemName = this.getAttribute('data-delete-item');
-        showConfirmDialog('Delete this item?', '"'+itemName+'" and every purchase entry for it will be removed permanently. Linked sales are not deleted, but will lose their match.', function(){
-          entries = entries.filter(function(e){ return !(e.type === 'purchase' && e.item === itemName); });
-          saveEntries();
-          renderAll();
-          showToast('Deleted.');
+        showConfirmDialog('Delete "'+itemName+'"?','All purchase entries for this item will be removed permanently.',function(){
+          entries = entries.filter(function(e){ return !(e.type==='purchase'&&e.item===itemName); });
+          saveEntries(); renderAll(); showToast('Deleted '+itemName);
         });
-      });
-    });
-
-    wrap.querySelectorAll('[data-inv-field]').forEach(function(el){
-      el.addEventListener('change', function(){
-        var itemName = this.getAttribute('data-inv-item');
-        var field = this.getAttribute('data-inv-field');
-        var val = this.value;
-        // Applies to all purchase entries for this item — inventory status is per-item, not per-transaction.
-        entries.filter(function(e){ return e.type === 'purchase' && e.item === itemName; }).forEach(function(e){
-          e[field] = val;
-        });
-        saveEntries();
-        renderAll();
       });
     });
   }
 
-  document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
+    document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
   document.querySelectorAll('#page-inventory .tab[data-inv-subtab]').forEach(function(tab){
     tab.addEventListener('click', function(){
@@ -4802,89 +5497,180 @@
   });
 
   // ---------- Expenses tab ----------
+  var _expensesType = 'all';
+  var _expensesView = 'list';
+
   function renderExpensesTable(){
     var tab = document.getElementById('page-expenses');
     if(!tab) return;
 
-    var search = (document.getElementById('expensesSearch').value || '').toLowerCase();
-    var expenses = entries.filter(function(e){ return e.type === 'expense'; });
-    if(search){
-      expenses = expenses.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
-    }
-    expenses = applySortState('expenses', expenses, {
-      item: function(a,b){ return compareText(a.item,b.item); },
-      category: function(a,b){ return compareText(a.category,b.category); },
-      type: function(a,b){ return compareText(a.recurrence,b.recurrence); },
-      qty: function(a,b){ return compareNumber(a.qty,b.qty); },
-      amount: function(a,b){ return compareNumber(a.qty*a.price,b.qty*b.price); },
-      date: function(a,b){ return compareText(a.date,b.date); }
-    });
-    if(!tableSortState.expenses.key) expenses = expenses.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
-
-    var totalThisMonth = 0, recurringTotal = 0, oneOffTotal = 0;
+    var search   = (document.getElementById('expensesSearch').value || '').toLowerCase();
+    var catFilter = document.getElementById('expensesCategoryFilter') ? document.getElementById('expensesCategoryFilter').value : '';
+    var now = new Date();
     var thisMonthPrefix = todayISO().slice(0,7);
-    entries.filter(function(e){ return e.type === 'expense'; }).forEach(function(e){
-      var amt = e.qty * e.price;
-      if(e.date.slice(0,7) === thisMonthPrefix) totalThisMonth += amt;
-      if(e.recurrence === 'Recurring') recurringTotal += amt;
-      else oneOffTotal += amt;
+    var thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay()===0?-6:1));
+    var thisWeekISO = thisWeekStart.toISOString().slice(0,10);
+
+    var allExpenses = entries.filter(function(e){ return e.type === 'expense'; });
+
+    // Stat calculations
+    var paid = 0, pending = 0, total = 0, thisMonth = 0, thisWeek = 0, recurringThisMonth = 0;
+    allExpenses.forEach(function(e){
+      var amt = (e.qty||1) * (e.price||0);
+      total += amt;
+      if(e.date && e.date >= thisWeekISO) thisWeek += amt;
+      if(e.date && e.date.slice(0,7) === thisMonthPrefix){
+        thisMonth += amt;
+        if(e.recurrence && e.recurrence !== 'One-off') recurringThisMonth += amt;
+      }
+      if(e.cardUsed || e.email) paid += amt;
+      else pending += amt;
     });
 
+    // Update stat cards
     document.getElementById('expensesSummaryRow').innerHTML = [
-      { label: 'This month', value: fmtMoney(totalThisMonth), color: 'var(--amber)', bg: 'var(--amber-dim)' },
-      { label: 'Recurring total', value: fmtMoney(recurringTotal), color: 'var(--violet)', bg: 'var(--violet-dim)' },
-      { label: 'One-off total', value: fmtMoney(oneOffTotal), color: 'var(--indigo)', bg: 'var(--indigo-dim)' }
+      { label: 'Paid',       sub: allExpenses.length + ' expenses<br><small style="color:var(--text-muted)">Business portion: '+fmtMoney(paid)+'</small>', value: fmtMoney(paid),       color: 'var(--indigo)', hex: '#6d6df0' },
+      { label: 'Pending',    sub: 'unpaid + future',                      value: fmtMoney(pending),    color: 'var(--amber)',  hex: '#f0b35c' },
+      { label: 'Total',      sub: 'paid + pending',                       value: fmtMoney(total),      color: 'var(--green)',  hex: '#2dd4a0' },
+      { label: 'This Month', sub: 'One-off + recurring fired<br><small style="color:var(--text-muted)">£'+recurringThisMonth.toFixed(2)+'/mo recurring committed</small>', value: fmtMoney(thisMonth), color: 'var(--violet)', hex: '#b78cf2' },
+      { label: 'This Week',  sub: 'One-off + recurring fired (Mon-Sun)',   value: fmtMoney(thisWeek),   color: 'var(--indigo)', hex: '#6d6df0' }
     ].map(function(c){
-      return '<div class="stat-card"><div class="icon" style="background:'+c.bg+';color:'+c.color+';"></div><div class="label">'+c.label+'</div><div class="value">'+c.value+'</div></div>';
+      return '<div class="stat-card" style="border-top:2px solid '+c.color+';background:linear-gradient(135deg,'+c.hex+'0d 0%,transparent 60%);">' +
+        '<div class="label">'+c.label+'</div>' +
+        '<div class="value" style="color:'+c.color+';">'+c.value+'</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">'+c.sub+'</div>' +
+      '</div>';
     }).join('');
 
-    document.getElementById('expensesCountSub').textContent = expenses.length + ' expense' + (expenses.length===1?'':'s');
-    var wrap = document.getElementById('expensesTableWrap');
+    // Category mini cards
+    var byCategory = {};
+    allExpenses.forEach(function(e){
+      var cat = e.category || 'Uncategorised';
+      if(!byCategory[cat]) byCategory[cat] = { count: 0, total: 0 };
+      byCategory[cat].count++;
+      byCategory[cat].total += (e.qty||1) * (e.price||0);
+    });
+    var CAT_COLORS = ['var(--indigo)','var(--violet)','var(--green)','var(--amber)','var(--red)'];
+    var catEl = document.getElementById('expensesCategoryCards');
+    if(catEl){
+      catEl.innerHTML = Object.keys(byCategory).map(function(cat, i){
+        var c = byCategory[cat];
+        var col = CAT_COLORS[i % CAT_COLORS.length];
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;min-width:120px;" onclick="document.getElementById(\'expensesCategoryFilter\').value=\''+escapeAttr(cat)+'\';renderExpensesTable();">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0;"></span>' +
+          '<div><div style="font-size:12px;font-weight:600;">'+escapeHtml(cat)+'</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);">'+fmtMoney(c.total)+'</div></div>' +
+        '</div>';
+      }).join('');
+    }
 
+    // Update category filter options
+    var catSelect = document.getElementById('expensesCategoryFilter');
+    if(catSelect && catSelect.options.length <= 1){
+      Object.keys(byCategory).forEach(function(cat){
+        var opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        catSelect.appendChild(opt);
+      });
+    }
+
+    // Update date display
+    var dateEl = document.getElementById('expensesDateDisplay');
+    if(dateEl) dateEl.textContent = now.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+
+    // Filter expenses
+    var expenses = allExpenses.slice();
+    if(_expensesType !== 'all'){
+      expenses = expenses.filter(function(e){
+        var r = (e.recurrence || 'one-off').toLowerCase();
+        if(_expensesType === 'one-off')   return r === 'one-off' || !e.recurrence;
+        if(_expensesType === 'recurring') return r !== 'one-off' && !!e.recurrence;
+        if(_expensesType === 'weekly')    return r === 'weekly';
+        if(_expensesType === 'monthly')   return r === 'monthly';
+        if(_expensesType === 'yearly')    return r === 'yearly';
+        return true;
+      });
+    }
+    if(catFilter) expenses = expenses.filter(function(e){ return (e.category||'Uncategorised') === catFilter; });
+    if(search) expenses = expenses.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1 || (e.category||'').toLowerCase().indexOf(search) !== -1; });
+
+    expenses = applySortState('expenses', expenses, {
+      item:     function(a,b){ return compareText(a.item,b.item); },
+      category: function(a,b){ return compareText(a.category,b.category); },
+      type:     function(a,b){ return compareText(a.recurrence,b.recurrence); },
+      qty:      function(a,b){ return compareNumber(a.qty,b.qty); },
+      amount:   function(a,b){ return compareNumber(a.qty*a.price,b.qty*b.price); },
+      date:     function(a,b){ return compareText(a.date,b.date); }
+    });
+    if(!tableSortState.expenses || !tableSortState.expenses.key) expenses = expenses.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+    // Footer
+    var footerCount = document.getElementById('expensesFooterCount');
+    var footerRec   = document.getElementById('expensesFooterRecurring');
+    if(footerCount) footerCount.textContent = expenses.length + ' expense' + (expenses.length===1?'':'s') + ' of ' + allExpenses.length;
+    if(footerRec)   footerRec.textContent = fmtMoney(recurringThisMonth);
+
+    var wrap = document.getElementById('expensesTableWrap');
     if(!expenses.length){
-      wrap.innerHTML = '<div class="empty-state"><div class="icon-big">···</div>No expenses logged yet.</div>';
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">No expenses match your filters.</div>';
       return;
     }
 
-    var headerRow = buildSortableHeader('expenses', [
-      { label: 'Item', sortKey: 'item' },
-      { label: 'Category', sortKey: 'category' },
-      { label: 'Type', sortKey: 'type' },
-      { label: 'Qty', sortKey: 'qty', cls: 'right' },
-      { label: 'Amount', sortKey: 'amount', cls: 'right' },
-      { label: 'Date', sortKey: 'date' },
-      { label: 'Card' },
-      { label: 'Email' },
-      { label: 'Notes' },
-      { label: '' }
-    ]);
+    function recurrenceBadge(r){
+      if(!r || r === 'One-off') return '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-muted);">One-off</span>';
+      var col = r === 'Monthly' ? 'var(--violet)' : r === 'Weekly' ? 'var(--amber)' : r === 'Yearly' ? 'var(--indigo)' : 'var(--green)';
+      return '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:'+col+'22;color:'+col+';">'+escapeHtml(r)+'</span>';
+    }
 
-    var tableHtml = '<table><thead>' + headerRow + '</thead><tbody>' +
-      expenses.map(function(e){
-        return '<tr>' +
-          '<td>'+escapeHtml(e.item)+'</td>' +
-          '<td>'+escapeHtml(e.category || '—')+'</td>' +
-          '<td>'+escapeHtml(e.recurrence || '—')+'</td>' +
-          '<td class="right">'+e.qty+'</td>' +
-          '<td class="right">'+fmtMoney(e.qty*e.price)+'</td>' +
-          '<td>'+fmtDateUK(e.date)+'</td>' +
-          '<td>'+escapeHtml(e.cardUsed || '—')+'</td>' +
-          '<td>'+escapeHtml(e.email || '—')+'</td>' +
-          '<td>'+escapeHtml(e.notes || '—')+'</td>' +
-          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-expense="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Delete</button></td>' +
-        '</tr>';
-      }).join('') +
-      '</tbody></table>';
-
-    wrap.innerHTML = wrapTableForDisplay('expenses', 'Expenses', tableHtml);
-    wireSortableHeaders(wrap, renderExpensesTable);
-    wireMaximizeButtons(wrap);
-    TABLE_RERENDER_FNS.expenses = renderExpensesTable;
+    if(_expensesView === 'grouped'){
+      var grouped = {};
+      expenses.forEach(function(e){ var g = e.category || 'Uncategorised'; if(!grouped[g]) grouped[g] = []; grouped[g].push(e); });
+      wrap.innerHTML = Object.keys(grouped).map(function(cat){
+        var catTotal = grouped[cat].reduce(function(s,e){ return s+(e.qty||1)*(e.price||0); }, 0);
+        return '<div style="margin-bottom:16px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:4px;">' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);">'+escapeHtml(cat)+' <span style="font-weight:400;color:var(--text-muted);">('+grouped[cat].length+')</span></div>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--red);">'+fmtMoney(catTotal)+'</div>' +
+          '</div>' +
+          grouped[cat].map(function(e){ return expenseRowHtml(e, recurrenceBadge); }).join('') +
+        '</div>';
+      }).join('');
+    } else if(_expensesView === 'table'){
+      var headerRow = buildSortableHeader('expenses', [
+        { label: 'Item',     sortKey: 'item' },
+        { label: 'Category', sortKey: 'category' },
+        { label: 'Type',     sortKey: 'type' },
+        { label: 'Qty',      sortKey: 'qty', cls: 'right' },
+        { label: 'Amount',   sortKey: 'amount', cls: 'right' },
+        { label: 'Date',     sortKey: 'date' },
+        { label: 'Card' }, { label: 'Notes' }, { label: '' }
+      ]);
+      var tableHtml = '<table><thead>'+headerRow+'</thead><tbody>' +
+        expenses.map(function(e){
+          return '<tr>' +
+            '<td>'+escapeHtml(e.item)+'</td>' +
+            '<td>'+escapeHtml(e.category||'—')+'</td>' +
+            '<td>'+recurrenceBadge(e.recurrence)+'</td>' +
+            '<td class="right">'+(e.qty||1)+'</td>' +
+            '<td class="right" style="color:var(--red);">'+fmtMoney((e.qty||1)*(e.price||0))+'</td>' +
+            '<td>'+fmtDateUK(e.date)+'</td>' +
+            '<td>'+escapeHtml(e.cardUsed||'—')+'</td>' +
+            '<td>'+escapeHtml(e.notes||'—')+'</td>' +
+            '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-expense="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Delete</button></td>' +
+          '</tr>';
+        }).join('') + '</tbody></table>';
+      wrap.innerHTML = wrapTableForDisplay('expenses','Expenses',tableHtml);
+      wireSortableHeaders(wrap, renderExpensesTable);
+      wireMaximizeButtons(wrap);
+      TABLE_RERENDER_FNS.expenses = renderExpensesTable;
+    } else {
+      // List view
+      wrap.innerHTML = expenses.map(function(e){ return expenseRowHtml(e, recurrenceBadge); }).join('');
+    }
 
     wrap.querySelectorAll('[data-edit-expense]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var id = this.getAttribute('data-edit-expense');
-        var entry = entries.find(function(e){ return e.id === id; });
+        var entry = entries.find(function(e){ return e.id === this.getAttribute('data-edit-expense'); }.bind(this));
         if(entry) openAddModal('expense', entry);
       });
     });
@@ -4895,8 +5681,70 @@
     });
   }
 
+  function expenseRowHtml(e, recurrenceBadge) {
+    var amt = (e.qty||1) * (e.price||0);
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">💸</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:600;font-size:13px;">'+escapeHtml(e.item)+'</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' +
+          escapeHtml(e.category||'Uncategorised') + ' · ' + fmtDateUK(e.date) +
+          (e.cardUsed ? ' · '+escapeHtml(e.cardUsed) : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="text-align:right;flex-shrink:0;">' +
+        '<div style="font-weight:600;font-size:13px;color:var(--red);">'+fmtMoney(amt)+'</div>' +
+        '<div style="margin-top:4px;">'+recurrenceBadge(e.recurrence)+'</div>' +
+      '</div>' +
+      '<div style="flex-shrink:0;display:flex;gap:6px;">' +
+        '<button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-expense="'+e.id+'">Edit</button>' +
+        '<button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Delete</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   document.getElementById('expensesSearch').addEventListener('input', renderExpensesTable);
   document.getElementById('addExpenseBtn').addEventListener('click', function(){ openAddModal('expense'); });
+
+  document.getElementById('expensesTypeTabs').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-exptype]');
+    if(!btn) return;
+    _expensesType = btn.getAttribute('data-exptype');
+    document.querySelectorAll('.exp-type-tab').forEach(function(t){
+      var active = t.getAttribute('data-exptype') === _expensesType;
+      t.style.background = active ? 'var(--surface-2)' : 'transparent';
+      t.style.fontWeight = active ? '600' : '400';
+      t.style.color = active ? 'var(--text-primary)' : 'var(--text-secondary)';
+    });
+    renderExpensesTable();
+  });
+
+  document.querySelector('[data-expview]') && document.querySelector('#page-expenses').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-expview]');
+    if(!btn) return;
+    _expensesView = btn.getAttribute('data-expview');
+    document.querySelectorAll('.exp-view-tab').forEach(function(t){
+      var active = t.getAttribute('data-expview') === _expensesView;
+      t.style.background = active ? 'var(--indigo)' : 'transparent';
+      t.style.color = active ? '#fff' : 'var(--text-secondary)';
+    });
+    renderExpensesTable();
+  });
+
+  document.getElementById('expensesCategoryFilter').addEventListener('change', renderExpensesTable);
+
+  document.getElementById('exportExpensesBtn').addEventListener('click', function(){
+    var expenses = entries.filter(function(e){ return e.type === 'expense'; });
+    var csv = ['Date,Item,Category,Type,Qty,Amount,Card,Notes'];
+    expenses.forEach(function(e){
+      csv.push([e.date, e.item, e.category||'', e.recurrence||'One-off', e.qty||1, (e.qty||1)*(e.price||0), e.cardUsed||'', e.notes||''].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','));
+    });
+    var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'expenses-'+todayISO()+'.csv';
+    a.click();
+  });
 
   // ---------- Income tab ----------
   function renderIncomeTable(){
@@ -6076,6 +6924,23 @@
 
   var staticExpensesLink = document.querySelector('#page-dashboard a[data-go-tab="expenses"]');
 
+  document.getElementById('activityFilterTabs').addEventListener('click', function(e){
+    var tab = e.target.closest('[data-af]');
+    if(!tab) return;
+    activityFilter = tab.getAttribute('data-af');
+    var COLORS = { orders: 'var(--amber)', sales: 'var(--green)', preorders: 'var(--violet)' };
+    var DIMS   = { orders: 'var(--amber-dim)', sales: 'var(--green-dim)', preorders: 'var(--violet-dim)' };
+    document.querySelectorAll('#activityFilterTabs [data-af]').forEach(function(t){
+      var af = t.getAttribute('data-af');
+      var active = af === activityFilter;
+      t.style.background = active ? DIMS[af] : 'transparent';
+      t.style.borderRadius = '99px';
+      var label = t.querySelector('span:last-child');
+      if(label){ label.style.color = active ? COLORS[af] : 'var(--text-secondary)'; label.style.fontWeight = active ? '600' : '400'; }
+    });
+    renderOverviewActivity();
+  });
+
   document.getElementById('themeToggleBtn').addEventListener('click', function(){
     prefs.lightMode = !prefs.lightMode;
     applyPrefs();
@@ -6105,6 +6970,9 @@
     await loadItemIdRegistry();
     await loadTicketIdRegistry();
     await loadPresets();
+    setLoadingStatus('Syncing new orders…', 75);
+    var newFromSheet = await syncFromSheet();
+    if(newFromSheet > 0){ await loadEntries(); } // reload if new entries arrived
     setLoadingStatus('Rendering dashboard…', 90);
     applyPrefs();
     initSettingsPage();
