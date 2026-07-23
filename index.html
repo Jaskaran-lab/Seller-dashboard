@@ -2133,14 +2133,16 @@
   // Push entries to Apps Script KV store — runs silently after every save
   // so any new file version can pull complete data on first load
   function pushBackupToKV(){
-    if(window.location.protocol === 'file:') return; // skip on local file
+    if(window.location.protocol === 'file:') return;
     var url = BACKUP_SCRIPT_URL;
     fetch(url, {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'set', key: 'inventory:entries', value: JSON.stringify(entries) })
-    }).catch(function(e){ console.warn('KV sync skipped:', e.message); });
+    }).then(function(r){ return r.json(); })
+      .then(function(d){ console.log('KV store synced:', entries.length, 'entries'); })
+      .catch(function(e){ console.warn('KV sync skipped:', e.message); });
   }
 
   var PREFS_KEY = 'inventory:prefs';
