@@ -5144,7 +5144,7 @@
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
-          '<td class="right" style="color:var(--text-secondary);font-size:12px;">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
+          '<td class="right" style="font-weight:600;color:'+(daysHeld===null?'var(--text-muted)':daysHeld<=30?'var(--green)':daysHeld<=60?'var(--amber)':'var(--red)')+';">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
           '<td class="right" style="font-weight:600;">'+(inStock<0?'<span style="color:var(--red);">'+inStock+'</span>':inStock)+'</td>' +
           '<td class="right" style="color:var(--text-muted);">'+r.soldQty+'</td>' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(r.buyPrice)+'</td>' +
