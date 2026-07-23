@@ -3932,12 +3932,13 @@
 
   function daysHeldFor(dateBoughtIso){
     if(!dateBoughtIso) return null;
-    var bought = new Date(dateBoughtIso+'T00:00:00');
+    // Handle both 'YYYY-MM-DD' and full ISO timestamps like '2026-05-11T23:00:00.000Z'
+    var bought = new Date(dateBoughtIso);
     if(isNaN(bought.getTime())) return null;
+    bought.setHours(0,0,0,0);
     var today = new Date();
     today.setHours(0,0,0,0);
-    var diffMs = today - bought;
-    return Math.max(Math.round(diffMs / 86400000), 0);
+    return Math.max(Math.round((today - bought) / 86400000), 0);
   }
 
   // Returns null (not 0) when there's no linked purchase to compare against —
