@@ -5251,123 +5251,132 @@
   // ---------- Sales tab ----------
   var salesPlatformFilter = 'all';
 
+  var _salesPage = 1;
+  var _salesPageSize = 50;
+
   function renderSalesTable(){
     var salesTab = document.getElementById('page-sales');
     if(!salesTab) return;
 
     var search = (document.getElementById('salesSearch').value || '').toLowerCase();
-    var sales = entries.filter(function(e){ return e.type === 'sale'; });
+    var allSales = entries.filter(function(e){ return e.type === 'sale'; });
 
-    if(salesPlatformFilter !== 'all'){
-      sales = sales.filter(function(e){ return (e.platform || 'Other') === salesPlatformFilter; });
-    }
-    if(search){
-      sales = sales.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
-    }
+    var sales = allSales.slice();
+    if(salesPlatformFilter !== 'all') sales = sales.filter(function(e){ return (e.platform||'Other') === salesPlatformFilter; });
+    if(search) sales = sales.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
+
     sales = applySortState('sales', sales, {
-      item: function(a,b){ return compareText(a.item,b.item); },
-      platform: function(a,b){ return compareText(a.platform,b.platform); },
-      date: function(a,b){ return compareText(a.date,b.date); },
-      qty: function(a,b){ return compareNumber(a.qty,b.qty); },
-      price: function(a,b){ return compareNumber(a.price,b.price); },
-      postage: function(a,b){ return compareNumber(a.postage,b.postage); },
-      netProfit: function(a,b){ return compareNumber(netProfitForSale(a), netProfitForSale(b)); }
+      item:      function(a,b){ return compareText(a.item,b.item); },
+      platform:  function(a,b){ return compareText(a.platform,b.platform); },
+      date:      function(a,b){ return compareText(a.date,b.date); },
+      qty:       function(a,b){ return compareNumber(a.qty,b.qty); },
+      price:     function(a,b){ return compareNumber(a.price,b.price); },
+      postage:   function(a,b){ return compareNumber(a.postage,b.postage); },
+      netProfit: function(a,b){ return compareNumber(netProfitForSale(a),netProfitForSale(b)); }
     });
-    if(!tableSortState.sales.key) sales = sales.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    if(!tableSortState.sales || !tableSortState.sales.key){
+      sales = sales.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    }
 
-    document.getElementById('salesCountSub').textContent = sales.length + ' sale' + (sales.length===1?'':'s');
+    document.getElementById('salesCountSub').textContent = sales.length + ' sale'+(sales.length===1?'':'s');
     var wrap = document.getElementById('salesTableWrap');
 
     if(!sales.length){
-      wrap.innerHTML = '<div class="empty-state"><div class="icon-big">···</div>No sales logged yet. Import an eBay CSV above, or add one manually.</div>';
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">No sales logged yet.</div>';
       return;
     }
 
-    var platformOptions = lists.platforms;
+    // Totals
+    var totalRevenue = sales.reduce(function(s,e){ return s+saleRevenue(e); },0);
+    var totalProfit  = sales.reduce(function(s,e){ var np=netProfitForSale(e); return s+(np!==null?np:0); },0);
+    var unlinkedCount = sales.filter(function(e){ return netProfitForSale(e)===null; }).length;
+
+    // Pagination
+    var totalPages = Math.max(1, Math.ceil(sales.length/_salesPageSize));
+    if(_salesPage > totalPages) _salesPage = totalPages;
+    var pageRows = sales.slice((_salesPage-1)*_salesPageSize, _salesPage*_salesPageSize);
 
     var headerRow = buildSortableHeader('sales', [
-      { label: 'ID' },
-      { label: 'Item', sortKey: 'item' },
-      { label: 'Platform', sortKey: 'platform' },
-      { label: 'Date', sortKey: 'date' },
-      { label: 'Qty', sortKey: 'qty', cls: 'right' },
-      { label: 'Sale price', sortKey: 'price', cls: 'right' },
-      { label: 'P&amp;P collected', sortKey: 'postage', cls: 'right' },
-      { label: 'Net profit', sortKey: 'netProfit', cls: 'right' },
-      { label: 'Linked item' },
-      { label: 'Card' },
-      { label: 'Notes' },
-      { label: '' }
+      { label: 'ID',           width: '70px' },
+      { label: 'Title',        sortKey: 'item',      width: '280px' },
+      { label: 'Status',       width: '100px' },
+      { label: 'Sell Platform',sortKey: 'platform',  width: '120px' },
+      { label: 'Sell Date',    sortKey: 'date',      width: '100px' },
+      { label: 'Sell Price',   sortKey: 'price',     width: '100px', cls: 'right' },
+      { label: 'Shipping',     sortKey: 'postage',   width: '90px',  cls: 'right' },
+      { label: 'Net Profit',   sortKey: 'netProfit', width: '110px', cls: 'right' },
+      { label: 'Linked Item',  width: '130px' },
+      { label: 'Notes',        width: '110px' },
+      { label: '',             width: '100px' }
     ]);
 
-    var tableHtml = '<table><thead>' + headerRow + '</thead><tbody>' +
-      sales.map(function(e){
-        var platOpts = platformOptions.map(function(p){
-          return '<option value="'+p+'"'+((e.platform||'Other')===p?' selected':'')+'>'+p+'</option>';
-        }).join('');
-
-        // Net profit only resolves when the sale is actually linked to a
-        // purchase — without that link there's no real cost basis to
-        // subtract, so this stays an honest "—" rather than assuming £0 cost.
-        var netProfitCell = '<span style="color:var(--text-muted);">—</span>';
-        var itemIdCell = '<span style="color:var(--text-muted);">—</span>';
+    var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
+      pageRows.map(function(e){
         var linkedMatch = resolveMatchedEntry(e.matchedItem);
         var netProfit = netProfitForSale(e);
-        if(netProfit !== null && linkedMatch){
-          itemIdCell = linkedMatch.type === 'ticket' ? getTicketId(linkedMatch.id) : getItemId(linkedMatch.item);
-          netProfitCell = '<span class="'+(netProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(netProfit)+'</span>';
-        }
-        var linkedDisplayName = linkedMatch ? linkedMatch.item : (e.matchedItem || '');
-
+        var itemId = linkedMatch ? (linkedMatch.type==='ticket' ? getTicketId(linkedMatch.id) : getItemId(linkedMatch.item)) : getItemId(e.item);
+        var netProfitCell = netProfit!==null ? '<span class="'+(netProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(netProfit)+'</span>' : '<span style="color:var(--text-muted);">—</span>';
+        var linkedName = linkedMatch ? linkedMatch.item : (e.matchedItem||'');
         var priceCell = fmtMoney(e.price);
-        if(linkedMatch && linkedMatch.type === 'ticket'){
-          var impliedEach = e.qty > 0 ? e.price / e.qty : e.price;
-          priceCell = fmtMoney(e.price) + '<div style="color:var(--text-muted); font-size:11px; margin-top:2px;">total · '+fmtMoney(impliedEach)+' each</div>';
+        if(linkedMatch && linkedMatch.type==='ticket'){
+          var each = e.qty>0 ? e.price/e.qty : e.price;
+          priceCell = fmtMoney(e.price)+'<div style="color:var(--text-muted);font-size:10px;">total · '+fmtMoney(each)+' each</div>';
         }
-
+        // Sold status pill
+        var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
+          '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
         return '<tr>' +
-          '<td style="color:var(--text-muted); font-size:11px;">'+itemIdCell+'</td>' +
-          '<td>'+escapeHtml(e.item)+(linkedDisplayName ? '<div style="color:var(--text-muted);font-size:11px;margin-top:2px;">linked to: '+escapeHtml(linkedDisplayName)+'</div>' : '')+'</td>' +
-          '<td><select data-sale-field="platform" data-sale-id="'+e.id+'" style="font-size:12px;padding:4px 6px;">'+platOpts+'</select></td>' +
-          '<td>'+fmtDateUK(e.date)+'</td>' +
-          '<td class="right">'+e.qty+'</td>' +
-          '<td class="right">'+priceCell+'</td>' +
+          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'S-'+e.id.slice(0,4))+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'">' +
+            '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>' +
+          '</td>' +
+          '<td>'+soldPill+'</td>' +
+          '<td style="color:var(--text-secondary);font-size:12px;">'+escapeHtml(e.platform||'—')+'</td>' +
+          '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.date)+'</td>' +
+          '<td class="right" style="font-weight:500;">'+priceCell+'</td>' +
           '<td class="right" style="color:var(--text-muted);">'+fmtMoney(e.postage||0)+'</td>' +
           '<td class="right">'+netProfitCell+'</td>' +
-          '<td>'+escapeHtml(linkedDisplayName || '—')+'</td>' +
-          '<td><select data-sale-field="cardUsed" data-sale-id="'+e.id+'" style="font-size:12px;padding:4px 6px;">'+cardOptionsHtml(e.cardUsed)+'</select></td>' +
-          '<td><input type="text" data-sale-field="notes" data-sale-id="'+e.id+'" value="'+escapeAttr(e.notes||'')+'" placeholder="—" style="border:none;background:transparent;font-size:12px;width:110px;"></td>' +
-          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-sale="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Delete</button></td>' +
+          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(linkedName)+'">'+escapeHtml(linkedName||'—')+'</td>' +
+          '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.notes||'—')+'</td>' +
+          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-sale="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Del</button></td>' +
         '</tr>';
-      }).join('') +
-      '</tbody></table>';
+      }).join('') + '</tbody></table>';
 
-    // Totals reflect whatever's currently filtered/searched, matching the
-    // count shown just above — not every sale ever logged.
-    var totalRevenue = sales.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
-    var totalProfit = sales.reduce(function(s,e){
-      var np = netProfitForSale(e);
-      return s + (np !== null ? np : 0);
-    }, 0);
-    var unlinkedCount = sales.filter(function(e){ return netProfitForSale(e) === null; }).length;
-
-    var footerHtml = '<div class="table-totals-bar">' +
-      '<span>Revenue: <strong class="money-val">'+fmtMoney(totalRevenue)+'</strong></span>' +
-      '<span>Profit: <strong class="'+(totalProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(totalProfit)+'</strong>' +
-        (unlinkedCount ? '<span style="color:var(--text-muted); font-size:11px;"> ('+unlinkedCount+' unlinked sale'+(unlinkedCount===1?'':'s')+' excluded)</span>' : '') +
-      '</span>' +
-      '<span style="margin-left:auto; color:var(--text-muted);">'+sales.length+' sale'+(sales.length===1?'':'s')+'</span>' +
+    // Footer with revenue, profit, pagination
+    var paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:4px;">' +
+      '<div style="display:flex;gap:20px;font-size:12px;">' +
+        '<span>Revenue: <strong style="color:var(--text-primary);">'+fmtMoney(totalRevenue)+'</strong></span>' +
+        '<span>Profit: <strong class="'+(totalProfit>=0?'pos':'neg')+'">'+fmtMoneySigned(totalProfit)+'</strong>' +
+          (unlinkedCount?'<span style="color:var(--text-muted);font-size:11px;"> ('+unlinkedCount+' unlinked)</span>':'') +
+        '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:12px;color:var(--text-muted);">'+sales.length+' sales</span>' +
+        '<select id="salesPageSizeSelect" style="font-size:12px;padding:4px 8px;width:auto;">' +
+          [25,50,100].map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('') +
+        '</select>' +
+        '<button class="btn" id="salesPrevBtn" style="padding:4px 10px;font-size:12px;"'+(_salesPage<=1?' disabled':'')+'>‹</button>' +
+        '<span style="font-size:12px;font-weight:600;">'+_salesPage+' / '+totalPages+'</span>' +
+        '<button class="btn" id="salesNextBtn" style="padding:4px 10px;font-size:12px;"'+(_salesPage>=totalPages?' disabled':'')+'>›</button>' +
+      '</div>' +
     '</div>';
 
-    wrap.innerHTML = wrapTableForDisplay('sales', 'Sales', tableHtml, true) + footerHtml;
+    wrap.innerHTML = wrapTableForDisplay('sales','Sales',tableHtml) + paginationHtml;
     wireSortableHeaders(wrap, renderSalesTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.sales = renderSalesTable;
 
+    // Pagination controls
+    var prev = document.getElementById('salesPrevBtn');
+    var next = document.getElementById('salesNextBtn');
+    var sz   = document.getElementById('salesPageSizeSelect');
+    if(prev) prev.addEventListener('click', function(){ if(_salesPage>1){ _salesPage--; renderSalesTable(); }});
+    if(next) next.addEventListener('click', function(){ if(_salesPage<totalPages){ _salesPage++; renderSalesTable(); }});
+    if(sz){ sz.value=String(_salesPageSize); sz.addEventListener('change', function(){ _salesPageSize=parseInt(this.value); _salesPage=1; renderSalesTable(); }); }
+
     wrap.querySelectorAll('[data-edit-sale]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var id = this.getAttribute('data-edit-sale');
-        var entry = entries.find(function(e){ return e.id === id; });
+        var entry = entries.find(function(e){ return e.id===this.getAttribute('data-edit-sale'); }.bind(this));
         if(entry) openAddModal('sale', entry);
       });
     });
@@ -5376,14 +5385,9 @@
         deleteEntry(this.getAttribute('data-delete-entry'), this.getAttribute('data-delete-label'));
       });
     });
-
-    wrap.querySelectorAll('[data-sale-field]').forEach(function(el){
-      el.addEventListener('change', function(){ updateSaleField(this); });
-      if(el.tagName === 'INPUT') el.addEventListener('blur', function(){ updateSaleField(this); });
-    });
   }
 
-  function updateSaleField(el){
+    function updateSaleField(el){
     var id = el.getAttribute('data-sale-id');
     var field = el.getAttribute('data-sale-field');
     var entry = entries.find(function(e){ return e.id === id; });
