@@ -1801,7 +1801,53 @@
   }
 
   var _trackingView = 'flow';
-  var _manualTrackingNumbers = []; // [{num, label}] added via "+ Track a parcel"
+  var _manualTrackingNumbers = JSON.parse(localStorage.getItem('inventory:manualTracking') || '[]');
+
+  function saveManualTracking(){
+    localStorage.setItem('inventory:manualTracking', JSON.stringify(_manualTrackingNumbers));
+  }
+
+  // ============================================================
+  // UI STATE PERSISTENCE
+  // Saves/loads all user preferences (page sizes, filters, views,
+  // sort states) to localStorage so they survive file updates.
+  // ============================================================
+  var UI_STATE_KEY = 'inventory:uiState';
+
+  function loadUIState(){
+    try {
+      var raw = localStorage.getItem(UI_STATE_KEY);
+      if(!raw) return;
+      var s = JSON.parse(raw);
+      if(s.trackingView)    _trackingView    = s.trackingView;
+      if(s.ordersPageSize)  _ordersPageSize  = s.ordersPageSize;
+      if(s.invPageSize)     _invPageSize     = s.invPageSize;
+      if(s.salesPageSize)   _salesPageSize   = s.salesPageSize;
+      if(s.expensesType)    _expensesType    = s.expensesType;
+      if(s.expensesView)    _expensesView    = s.expensesView;
+      if(s.tableSortState)  tableSortState   = s.tableSortState;
+      if(s.ordersStatusFilter) ordersStatusFilter = s.ordersStatusFilter;
+      if(s.invStatusFilter)    invStatusFilter    = s.invStatusFilter;
+      if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
+    } catch(e) { console.warn('Could not load UI state:', e); }
+  }
+
+  function saveUIState(){
+    try {
+      localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+        trackingView:       _trackingView,
+        ordersPageSize:     _ordersPageSize,
+        invPageSize:        _invPageSize,
+        salesPageSize:      _salesPageSize,
+        expensesType:       _expensesType,
+        expensesView:       _expensesView,
+        tableSortState:     tableSortState,
+        ordersStatusFilter: ordersStatusFilter,
+        invStatusFilter:    invStatusFilter,
+        salesPlatformFilter:salesPlatformFilter
+      }));
+    } catch(e) {}
+  }
 
   async function renderTrackingPage() {
     var wrap = document.getElementById('trackingWrap');
@@ -1941,7 +1987,10 @@
           r.status.events.slice(0,2).map(function(ev){ return '<div style="padding:2px 0;">'+escapeHtml((ev.eventDateTime||'').slice(0,16).replace('T',' '))+' — '+escapeHtml(ev.eventDescription||'')+'</div>'; }).join('') +
           '</div>'
         : '') +
-      (link?'<div style="margin-top:12px;"><a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:12px;padding:6px 14px;text-decoration:none;display:inline-block;">Track on '+escapeHtml(carrierName)+' →</a></div>':'') +
+      (link?'<div style="margin-top:12px;display:flex;gap:8px;"><a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:12px;padding:6px 14px;text-decoration:none;display:inline-block;">Track on '+escapeHtml(carrierName)+' →</a>' +
+        (r.t.entryId===null ? '<button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" onclick="(function(){_manualTrackingNumbers=_manualTrackingNumbers.filter(function(x){return x.num!==\''+escapeAttr(r.t.num)+'\';});saveManualTracking();renderTrackingPage();})()">Remove</button>' : '') +
+      '</div>' :
+        (r.t.entryId===null ? '<div style="margin-top:12px;"><button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" onclick="(function(){_manualTrackingNumbers=_manualTrackingNumbers.filter(function(x){return x.num!==\''+escapeAttr(r.t.num)+'\';});saveManualTracking();renderTrackingPage();})()">Remove</button></div>' : '')) +
     '</div>';
   }
 
@@ -3725,6 +3774,7 @@
       if(state.key === key) state.dir = state.dir * -1;
       else { state.key = key; state.dir = 1; }
       tableSortState[tableKey] = state;
+      saveUIState();
       rerenderFn();
     });
     // Wire column settings popover for any table in this wrap
@@ -3812,6 +3862,7 @@
     try { localStorage.setItem(COL_PREFS_KEY, JSON.stringify(colPrefs)); } catch(e){}
   }
   loadColPrefs();
+  loadUIState();
 
   function applyColPrefs(tableKey){
     var prefs = colPrefs[tableKey];
@@ -4144,7 +4195,7 @@
     if(next) next.addEventListener('click', function(){ if(_ordersPage<totalPages){ _ordersPage++; renderOrdersTable(); }});
     if(sz){
       sz.value = String(_ordersPageSize);
-      sz.addEventListener('change', function(){ _ordersPageSize=parseInt(this.value); _ordersPage=1; renderOrdersTable(); });
+      sz.addEventListener('change', function(){ _ordersPageSize=parseInt(this.value); _ordersPage=1; saveUIState(); renderOrdersTable(); });
     }
 
     // Status pill dropdown
@@ -5035,6 +5086,7 @@
     var label = document.getElementById('manualTrackingLabel').value.trim();
     if(!num){ showToast('Please enter a tracking number.', true); return; }
     _manualTrackingNumbers.push({ num: num, label: label || num });
+    saveManualTracking();
     document.getElementById('trackParcelModal').style.display = 'none';
     document.getElementById('manualTrackingNum').value = '';
     document.getElementById('manualTrackingLabel').value = '';
@@ -5045,6 +5097,7 @@
     var btn = e.target.closest('[data-view]');
     if(!btn) return;
     _trackingView = btn.getAttribute('data-view');
+    saveUIState();
     document.querySelectorAll('.tracking-view-tab').forEach(function(t){
       var active = t.getAttribute('data-view') === _trackingView;
       t.style.background = active ? 'var(--indigo)' : 'transparent';
@@ -5058,6 +5111,7 @@
       document.querySelectorAll('#ordersStatusFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
       this.classList.add('active');
       ordersStatusFilter = this.getAttribute('data-status');
+      saveUIState();
       renderOrdersTable();
     });
   });
@@ -5207,7 +5261,7 @@
     var sz   = document.getElementById('invPageSizeSelect');
     if(prev) prev.addEventListener('click', function(){ if(_invPage>1){ _invPage--; renderInventoryPage(); }});
     if(next) next.addEventListener('click', function(){ if(_invPage<totalPages){ _invPage++; renderInventoryPage(); }});
-    if(sz)   sz.addEventListener('change', function(){ _invPageSize=parseInt(this.value); _invPage=1; renderInventoryPage(); });
+    if(sz)   sz.addEventListener('change', function(){ _invPageSize=parseInt(this.value); _invPage=1; saveUIState(); renderInventoryPage(); });
 
     wrap.querySelectorAll('.inv-status-pill').forEach(function(pill){
       pill.addEventListener('click', function(e){
@@ -5275,6 +5329,7 @@
       document.querySelectorAll('#invStatusFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
       this.classList.add('active');
       invStatusFilter = this.getAttribute('data-status');
+      saveUIState();
       renderInventoryPage();
     });
   });
@@ -5403,7 +5458,7 @@
     var sz   = document.getElementById('salesPageSizeSelect');
     if(prev) prev.addEventListener('click', function(){ if(_salesPage>1){ _salesPage--; renderSalesTable(); }});
     if(next) next.addEventListener('click', function(){ if(_salesPage<totalPages){ _salesPage++; renderSalesTable(); }});
-    if(sz){ sz.value=String(_salesPageSize); sz.addEventListener('change', function(){ _salesPageSize=parseInt(this.value); _salesPage=1; renderSalesTable(); }); }
+    if(sz){ sz.value=String(_salesPageSize); sz.addEventListener('change', function(){ _salesPageSize=parseInt(this.value); _salesPage=1; saveUIState(); renderSalesTable(); }); }
 
     wrap.querySelectorAll('[data-edit-sale]').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -5434,6 +5489,7 @@
       document.querySelectorAll('#salesPlatformFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
       this.classList.add('active');
       salesPlatformFilter = this.getAttribute('data-platform');
+      saveUIState();
       renderSalesTable();
     });
   });
@@ -5810,6 +5866,7 @@
     var btn = e.target.closest('[data-exptype]');
     if(!btn) return;
     _expensesType = btn.getAttribute('data-exptype');
+    saveUIState();
     document.querySelectorAll('.exp-type-tab').forEach(function(t){
       var active = t.getAttribute('data-exptype') === _expensesType;
       t.style.background = active ? 'var(--surface-2)' : 'transparent';
@@ -5823,6 +5880,7 @@
     var btn = e.target.closest('[data-expview]');
     if(!btn) return;
     _expensesView = btn.getAttribute('data-expview');
+    saveUIState();
     document.querySelectorAll('.exp-view-tab').forEach(function(t){
       var active = t.getAttribute('data-expview') === _expensesView;
       t.style.background = active ? 'var(--indigo)' : 'transparent';
