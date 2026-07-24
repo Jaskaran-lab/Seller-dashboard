@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.3</span>
+    <span class="version-pill">v2.4</span>
   </div>
 </div>
 
@@ -3474,15 +3474,12 @@
     var totalIncome = income.reduce(function(s,e){ return s+e.qty*e.price; }, 0);
     var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses);
 
-    var unrealisedTotal = totalUnrealisedProfit();
     var cards = [
       { label: 'Pending orders', value: pending.length, sub: 'Awaiting arrival', goTab: 'orders', color: 'var(--amber)', bg: 'var(--amber-dim)' },
       { label: 'Inventory', value: Math.max(inStockUnits,0), sub: fmtMoney(receivedCost)+' · '+received.reduce(function(s,e){return s+e.qty;},0)+' received · '+listed.reduce(function(s,e){return s+e.qty;},0)+' listed', goTab: 'inventory', color: 'var(--green)', bg: 'var(--green-dim)' },
       { label: 'Profit', value: fmtMoneySigned(profit), sub: 'Last 30 days', goTab: 'analytics', color: profit>=0?'var(--green)':'var(--red)', bg: profit>=0?'var(--green-dim)':'var(--red-dim)', valueClass: profit>=0?'pos':'neg' },
-      prefs.unrealisedProfit ? { label: 'Unrealised', value: fmtMoneySigned(unrealisedTotal), sub: 'Estimated profit on unsold stock', goTab: 'orders', color: unrealisedTotal>=0?'var(--indigo)':'var(--red)', bg: unrealisedTotal>=0?'var(--indigo-dim)':'var(--red-dim)', valueClass: unrealisedTotal>=0?'pos':'neg' } : null,
-      prefs.unrealisedProfit ? null : { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' },
-      prefs.unrealisedProfit ? { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' } : null
-    ].filter(Boolean);
+      { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' }
+    ];
 
     var ICONS = [
       'M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2M8 4v4h8V4M8 4h8M9 14l2 2 4-4',
@@ -5404,12 +5401,17 @@
       return s + Math.max(0, r.received+r.listed-r.soldQty) * r.buyPrice;
     },0);
 
+    var unrealisedTotal = prefs.unrealisedProfit ? totalUnrealisedProfit() : null;
+
     document.getElementById('invSummaryRow').innerHTML = [
       { label: 'Received', value: totalReceived, color: 'var(--indigo)', hex: '#6d6df0' },
       { label: 'Listed',   value: activeListings,color: 'var(--violet)', hex: '#b78cf2' },
-      { label: 'Sold',     value: totalSold,     color: 'var(--green)',  hex: '#2dd4a0' }
-    ].map(function(c){
-      return '<div class="stat-card" style="border-top:2px solid '+c.color+';background:linear-gradient(135deg,'+c.hex+'0d 0%,transparent 60%);"><div class="label">'+c.label+'</div><div class="value" style="color:'+c.color+';">'+c.value+'</div></div>';
+      { label: 'Sold',     value: totalSold,     color: 'var(--green)',  hex: '#2dd4a0' },
+      unrealisedTotal !== null ? { label: 'Unrealised profit', value: fmtMoneySigned(unrealisedTotal), color: unrealisedTotal>=0?'var(--green)':'var(--red)', hex: unrealisedTotal>=0?'#2dd4a0':'#f06d6d', isText: true } : null
+    ].filter(Boolean).map(function(c){
+      return '<div class="stat-card" style="border-top:2px solid '+c.color+';background:linear-gradient(135deg,'+c.hex+'0d 0%,transparent 60%);">' +
+        '<div class="label">'+c.label+'</div>' +
+        '<div class="value" style="color:'+c.color+';">'+c.value+'</div></div>';
     }).join('');
 
     var totalPages = Math.max(1, Math.ceil(allRows.length/_invPageSize));
