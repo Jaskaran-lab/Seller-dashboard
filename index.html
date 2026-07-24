@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.2</span>
+    <span class="version-pill">v2.3</span>
   </div>
 </div>
 
@@ -1134,6 +1134,7 @@
         </div>
       </div>
       <div id="analyticsPlatformTableWrap"></div>
+      <div id="analyticsUnrealisedSection" style="margin-top:20px;"></div>
     </div>
   </div>
 
@@ -2987,6 +2988,50 @@
     renderAnalyticsTopSites(purchases);
     renderAnalyticsPreorderSummary();
     renderAnalyticsPlatformTable(sales);
+    if(prefs.unrealisedProfit) renderAnalyticsUnrealised(purchases);
+  }
+
+  function renderAnalyticsUnrealised(purchases) {
+    var el = document.getElementById('analyticsUnrealisedSection');
+    if(!el) return;
+
+    var withEstimate = purchases.filter(function(e){ return e.expectedSellPrice > 0 && effectiveStatus(e) !== 'Sold'; });
+    if(!withEstimate.length){
+      el.innerHTML = '<div class="panel"><div class="panel-head"><h2>Unrealised Profit</h2></div>' +
+        '<div class="empty-state" style="padding:40px;">No expected sell prices set yet. Edit any order to add one.</div></div>';
+      return;
+    }
+
+    var totalCost = withEstimate.reduce(function(s,e){ return s+(e.price||0)*(e.qty||1); }, 0);
+    var totalExpected = withEstimate.reduce(function(s,e){ return s+e.expectedSellPrice*(e.qty||1); }, 0);
+    var totalUnrealised = totalExpected - totalCost;
+    var avgROI = totalCost > 0 ? ((totalUnrealised / totalCost) * 100).toFixed(1) : '0.0';
+
+    var rows = withEstimate.slice().sort(function(a,b){
+      return unrealisedProfitForEntry(b) - unrealisedProfitForEntry(a);
+    }).map(function(e){
+      var up = unrealisedProfitForEntry(e);
+      var cost = (e.price||0)*(e.qty||1);
+      var roi = cost > 0 ? ((up/cost)*100).toFixed(1) : '0.0';
+      return '<tr>' +
+        '<td>'+escapeHtml(e.item)+'</td>' +
+        '<td class="right">'+fmtMoney(e.price)+'</td>' +
+        '<td class="right">'+fmtMoney(e.expectedSellPrice)+'</td>' +
+        '<td class="right">'+fmtUnrealised(up)+'</td>' +
+        '<td class="right">'+fmtROI(parseFloat(roi))+'</td>' +
+      '</tr>';
+    }).join('');
+
+    el.innerHTML = '<div class="panel">' +
+      '<div class="panel-head"><div><h2>Unrealised Profit</h2><span class="sub">Estimated profit on unsold stock</span></div></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">' +
+        '<div class="stat-card" style="border-top:2px solid var(--indigo);background:linear-gradient(135deg,#6d6df00d,transparent 60%);"><div class="label">Estimated revenue</div><div class="value" style="color:var(--indigo);">'+fmtMoney(totalExpected)+'</div></div>' +
+        '<div class="stat-card" style="border-top:2px solid var(--green);background:linear-gradient(135deg,#2dd4a00d,transparent 60%);"><div class="label">Unrealised profit</div><div class="value" style="color:var(--green);">'+fmtMoneySigned(totalUnrealised)+'</div></div>' +
+        '<div class="stat-card" style="border-top:2px solid var(--amber);background:linear-gradient(135deg,#f0b35c0d,transparent 60%);"><div class="label">Avg ROI</div><div class="value" style="color:var(--amber);">'+avgROI+'%</div></div>' +
+      '</div>' +
+      '<table><thead><tr><th>Item</th><th class="right">Cost</th><th class="right">Expected sell</th><th class="right">Est. profit</th><th class="right">ROI %</th></tr></thead>' +
+      '<tbody>'+rows+'</tbody></table>' +
+    '</div>';
   }
 
   function renderAnalyticsRevenueProfitChart(sales){
@@ -3429,12 +3474,15 @@
     var totalIncome = income.reduce(function(s,e){ return s+e.qty*e.price; }, 0);
     var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses);
 
+    var unrealisedTotal = totalUnrealisedProfit();
     var cards = [
       { label: 'Pending orders', value: pending.length, sub: 'Awaiting arrival', goTab: 'orders', color: 'var(--amber)', bg: 'var(--amber-dim)' },
       { label: 'Inventory', value: Math.max(inStockUnits,0), sub: fmtMoney(receivedCost)+' · '+received.reduce(function(s,e){return s+e.qty;},0)+' received · '+listed.reduce(function(s,e){return s+e.qty;},0)+' listed', goTab: 'inventory', color: 'var(--green)', bg: 'var(--green-dim)' },
       { label: 'Profit', value: fmtMoneySigned(profit), sub: 'Last 30 days', goTab: 'analytics', color: profit>=0?'var(--green)':'var(--red)', bg: profit>=0?'var(--green-dim)':'var(--red-dim)', valueClass: profit>=0?'pos':'neg' },
-      { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' }
-    ];
+      prefs.unrealisedProfit ? { label: 'Unrealised', value: fmtMoneySigned(unrealisedTotal), sub: 'Estimated profit on unsold stock', goTab: 'orders', color: unrealisedTotal>=0?'var(--indigo)':'var(--red)', bg: unrealisedTotal>=0?'var(--indigo-dim)':'var(--red-dim)', valueClass: unrealisedTotal>=0?'pos':'neg' } : null,
+      prefs.unrealisedProfit ? null : { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' },
+      prefs.unrealisedProfit ? { label: 'Pre orders', value: preorders.length, sub: 'Active pre-orders locked in', goTab: 'preorders', color: 'var(--violet)', bg: 'var(--violet-dim)' } : null
+    ].filter(Boolean);
 
     var ICONS = [
       'M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2M8 4v4h8V4M8 4h8M9 14l2 2 4-4',
@@ -3638,7 +3686,7 @@
 
     function orderRow(e, idx){
       var itemId = getItemId(e.item) || ('O-'+ String(idx+1).padStart(3,'0'));
-      var prefix = itemId.replace(/(\D+)-(\d+)/, function(_,p,n){ return '<span style="color:var(--amber);font-weight:700;">'+p+'</span><span style="color:var(--text-muted);">-'+n+'</span>'; });
+      var prefix = fmtItemId(itemId);
       var st = effectiveStatus(e);
       var statusLabel = st === 'Received' ? 'In Hand' : st;
       var sub = [e.site, fmtDateUK(e.purchasedOn||e.date)].filter(Boolean).join(' · ');
@@ -3673,7 +3721,7 @@
 
     function preorderRow(e, idx){
       var itemId = getItemId(e.item) || ('ITM-'+String(idx+1).padStart(3,'0'));
-      var prefix = itemId.replace(/(\D+)-(\d+)/, function(_,p,n){ return '<span style="color:var(--violet);font-weight:700;">'+p+'</span><span style="color:var(--text-muted);">-'+n+'</span>'; });
+      var prefix = fmtItemId(itemId);
       var paidLabel = e.paidStatus ? 'Paid' : 'Unpaid';
       var sub = [e.site, fmtDateUK(e.releaseDate||e.purchasedOn||e.date)].filter(Boolean).join(' · ');
       return '<div style="padding:12px 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;">' +
@@ -4230,15 +4278,15 @@
 
     var headerRow = buildSortableHeader('orders', [
       { label: 'ID',           width: '70px' },
-      { label: 'Title',        sortKey: 'item',        width: '260px' },
+      { label: 'Title',        sortKey: 'item',        width: '240px' },
       { label: 'Status',       sortKey: 'status',      width: '130px' },
       { label: 'Date Bought',  sortKey: 'date',        width: '110px' },
       { label: 'Buy Price',    sortKey: 'price',       width: '100px', cls: 'right' },
       { label: 'Total',        sortKey: 'total',       width: '90px',  cls: 'right' },
-      { label: 'Order #',      sortKey: 'orderNumber', width: '130px' },
+      { label: prefs.unrealisedProfit ? 'Est. Profit' : 'Order #', sortKey: 'orderNumber', width: '110px', cls: prefs.unrealisedProfit ? 'right' : '' },
       { label: 'Retailer',     sortKey: 'site',        width: '120px' },
-      { label: 'Email',                                width: '160px' },
-      { label: 'Notes',                                width: '110px' },
+      { label: 'Email',                                width: '150px' },
+      { label: 'Notes',                                width: '100px' },
       { label: '',             width: '110px' }
     ]);
 
@@ -4250,13 +4298,13 @@
         var statusPill = '<div class="order-status-pill" data-order-id="'+escapeAttr(e.id)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(st)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr>' +
-          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'—')+'</td>' +
+          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'"><span style="font-weight:500;">'+escapeHtml(e.item)+'</span></td>' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.purchasedOn||e.date)+'</td>' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(e.price)+'</td>' +
           '<td class="right" style="font-weight:600;">'+fmtMoney((e.qty||1)*e.price)+'</td>' +
-          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(String(e.orderNumber||'—'))+'</td>' +
+          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(prefs.unrealisedProfit ? fmtUnrealised(unrealisedProfitForEntry(e)) : escapeHtml(String(e.orderNumber||'—')))+'</td>' +
           '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.site||'—')+'</td>' +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.email||'—')+'</td>' +
           '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.notes||'—')+'</td>' +
@@ -4265,7 +4313,10 @@
       }).join('') + '</tbody></table>';
 
     var paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:4px;">' +
-      '<div style="font-size:12px;color:var(--text-muted);">Total spend: <strong style="color:var(--red);">'+fmtMoney(totalSpend)+'</strong></div>' +
+      '<div style="display:flex;gap:20px;font-size:12px;">' +
+        '<span style="color:var(--text-muted);">Total spend: <strong style="color:var(--red);">'+fmtMoney(totalSpend)+'</strong></span>' +
+        (prefs.unrealisedProfit ? '<span style="color:var(--text-muted);">Est. profit: <strong>'+fmtUnrealised(totalUnrealisedProfit())+'</strong></span>' : '') +
+      '</div>' +
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<span style="font-size:12px;color:var(--text-muted);">'+purchases.length+' orders</span>' +
         '<select id="ordersPageSizeSelect" style="font-size:12px;padding:4px 8px;width:auto;">' +
@@ -4406,6 +4457,65 @@
   // Looks up an item's permanent ID, assigning a new one on first sight.
   // Call this whenever an ID needs to be displayed — it's cheap and safe to
   // call repeatedly, since existing names always return their stored number.
+  // ============================================================
+  // UNREALISED PROFIT
+  // Calculates potential profit on unsold stock based on expected
+  // sell price. Real figures take over the moment an item sells.
+  // ============================================================
+  function unrealisedProfitForEntry(e) {
+    if(!prefs.unrealisedProfit) return null;
+    if(!e.expectedSellPrice || e.expectedSellPrice <= 0) return null;
+    var isSold = effectiveStatus(e) === 'Sold' ||
+      entries.some(function(s){ return s.type === 'sale' && s.matchedItem === e.item; });
+    if(isSold) return null; // real figures take over
+    var cost = (e.price || 0) * (e.qty || 1);
+    var expected = e.expectedSellPrice * (e.qty || 1);
+    return parseFloat((expected - cost).toFixed(2));
+  }
+
+  function totalUnrealisedProfit() {
+    if(!prefs.unrealisedProfit) return 0;
+    return entries.filter(function(e){ return e.type === 'purchase'; })
+      .reduce(function(sum, e){
+        var up = unrealisedProfitForEntry(e);
+        return sum + (up !== null ? up : 0);
+      }, 0);
+  }
+
+  function roiForSale(saleEntry) {
+    var linkedPurchase = entries.find(function(e){
+      return e.type === 'purchase' && e.item === saleEntry.matchedItem;
+    });
+    if(!linkedPurchase || !linkedPurchase.price) return null;
+    var cost = linkedPurchase.price * (saleEntry.qty || 1);
+    var revenue = saleRevenue(saleEntry);
+    return parseFloat(((revenue - cost) / cost * 100).toFixed(1));
+  }
+
+  // Formats unrealised profit as a coloured cell value
+  function fmtUnrealised(up) {
+    if(up === null) return '<span style="color:var(--text-muted);font-size:11px;">—</span>';
+    var col = up >= 0 ? 'var(--green)' : 'var(--red)';
+    var arrow = up >= 0 ? '▲' : '▼';
+    return '<span style="color:'+col+';font-weight:600;font-size:12px;">'+arrow+' '+fmtMoneySigned(up)+'</span>';
+  }
+
+  // Formats ROI % for sales
+  function fmtROI(roi) {
+    if(roi === null) return '<span style="color:var(--text-muted);font-size:11px;">—</span>';
+    var col = roi >= 0 ? 'var(--green)' : 'var(--red)';
+    return '<span style="color:'+col+';font-weight:600;font-size:12px;">'+roi+'%</span>';
+  }
+
+  // Formats any ITM/TKT/S ID with consistent amber prefix styling
+  function fmtItemId(id) {
+    if(!id) return '<span style="color:var(--text-muted);">—</span>';
+    return id.replace(/^([A-Za-z]+)-(\d+)$/, function(_, prefix, num){
+      return '<span style="color:var(--amber);font-weight:700;font-size:11px;">'+prefix+'</span>' +
+             '<span style="color:var(--text-muted);font-size:11px;">-'+num+'</span>';
+    }) || '<span style="color:var(--text-muted);font-size:11px;">'+escapeHtml(id)+'</span>';
+  }
+
   function getItemId(itemName){
     if(!itemName) return null;
     if(itemIdRegistry[itemName] === undefined){
@@ -4724,6 +4834,7 @@
         { key: 'qty', label: 'Qty', kind: 'number', placeholder: '1', default: '1' },
         { key: 'price', label: 'Buy price (each)', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'currency', label: 'Currency', kind: 'select', options: ['GBP','USD','EUR','JPY','CAD','AUD','CHF','CNY'], default: 'GBP' },
+        { key: 'expectedSellPrice', label: 'Expected sell price (optional)', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'site', label: 'Sourced from', kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Received','Listed','Pending','Cancelled','Returned'], default: 'Pending' },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
@@ -4747,6 +4858,7 @@
         { key: 'orderNumber',   label: 'Order number',      kind: 'text',     placeholder: '—' },
         { key: 'trackingNumber',label: 'Tracking number',   kind: 'text',     placeholder: 'e.g. AB123456789GB' },
         { key: 'postage',     label: 'Postage paid',      kind: 'number',   placeholder: '0.00', step: '0.01' },
+        { key: 'expectedSellPrice', label: 'Expected sell price', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'releaseDate', label: 'Expected arrival',  kind: 'date' },
         { key: 'notes',       label: 'Notes',             kind: 'text',     placeholder: '—' }
       ]
@@ -5144,6 +5256,7 @@
     if(configKeys.seats) row.seats = values.seats || '';
     if(configKeys.ticketType) row.ticketType = values.ticketType || '';
     if(configKeys.orderNumber) row.orderNumber = values.orderNumber || '';
+    if(configKeys.expectedSellPrice) row.expectedSellPrice = parseFloat(values.expectedSellPrice) || 0;
     if(configKeys.paidBackInitial) row.paidBackInitial = !!values.paidBackInitial;
     if(configKeys.paidStatus) row.paidStatus = !!values.paidStatus;
 
@@ -5340,7 +5453,7 @@
         var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr>' +
-          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'—')+'</td>' +
+          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
@@ -5499,17 +5612,18 @@
 
     var headerRow = buildSortableHeader('sales', [
       { label: 'ID',           width: '70px' },
-      { label: 'Title',        sortKey: 'item',      width: '280px' },
+      { label: 'Title',        sortKey: 'item',      width: '260px' },
       { label: 'Status',       width: '100px' },
-      { label: 'Sell Platform',sortKey: 'platform',  width: '120px' },
+      { label: 'Sell Platform',sortKey: 'platform',  width: '110px' },
       { label: 'Sell Date',    sortKey: 'date',      width: '100px' },
       { label: 'Sell Price',   sortKey: 'price',     width: '100px', cls: 'right' },
-      { label: 'Shipping',     sortKey: 'postage',   width: '90px',  cls: 'right' },
+      { label: 'Shipping',     sortKey: 'postage',   width: '80px',  cls: 'right' },
       { label: 'Net Profit',   sortKey: 'netProfit', width: '110px', cls: 'right' },
-      { label: 'Linked Item',  width: '130px' },
-      { label: 'Notes',        width: '110px' },
+      prefs.unrealisedProfit ? { label: 'ROI %', width: '80px', cls: 'right' } : null,
+      { label: 'Linked Item',  width: '120px' },
+      { label: 'Notes',        width: '100px' },
       { label: '',             width: '100px' }
-    ]);
+    ].filter(Boolean));
 
     var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
       pageRows.map(function(e){
@@ -5527,7 +5641,7 @@
         var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
           '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
         return '<tr>' +
-          '<td style="color:var(--text-muted);font-size:11px;font-weight:500;">'+escapeHtml(itemId||'S-'+e.id.slice(0,4))+'</td>' +
+          '<td style="font-size:11px;">'+fmtItemId(itemId||('S-'+e.id.slice(0,4)))+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'">' +
             '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>' +
           '</td>' +
@@ -5537,6 +5651,7 @@
           '<td class="right" style="font-weight:500;">'+priceCell+'</td>' +
           '<td class="right" style="color:var(--text-muted);">'+fmtMoney(e.postage||0)+'</td>' +
           '<td class="right">'+netProfitCell+'</td>' +
+          (prefs.unrealisedProfit ? '<td class="right">'+fmtROI(roiForSale(e))+'</td>' : '') +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(linkedName)+'">'+escapeHtml(linkedName||'—')+'</td>' +
           '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.notes||'—')+'</td>' +
           '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-sale="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Del</button></td>' +
