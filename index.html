@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.1</span>
+    <span class="version-pill">v2.2</span>
   </div>
 </div>
 
@@ -1920,6 +1920,36 @@
       if(s.invStatusFilter)    invStatusFilter    = s.invStatusFilter;
       if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
     } catch(e) { console.warn('Could not load UI state:', e); }
+  }
+
+  // ============================================================
+  // CURRENCY CONVERSION — Frankfurter API (free, no key needed)
+  // Converts foreign prices to GBP with 2.5% FX markup for
+  // PayPal/eBay/card processor fees.
+  // ============================================================
+  var exchangeRateCache = {};
+
+  async function convertToHomeCurrency(amount, fromCurrency, toCurrency, date) {
+    toCurrency = toCurrency || 'GBP';
+    date = date || 'latest';
+    if(fromCurrency === toCurrency) return { amountConverted: amount, rate: 1.0 };
+    var cacheKey = fromCurrency + '_' + toCurrency + '_' + date;
+    if(exchangeRateCache[cacheKey]) {
+      var cachedRate = exchangeRateCache[cacheKey];
+      return { amountConverted: parseFloat((amount * cachedRate).toFixed(2)), rate: cachedRate };
+    }
+    try {
+      var url = 'https://api.frankfurter.dev/v1/' + date + '?base=' + fromCurrency + '&symbols=' + toCurrency;
+      var res = await fetch(url);
+      var data = await res.json();
+      var rate = data.rates[toCurrency];
+      var effectiveRate = parseFloat((rate * 0.975).toFixed(4)); // 2.5% FX markup
+      exchangeRateCache[cacheKey] = effectiveRate;
+      return { amountConverted: parseFloat((amount * effectiveRate).toFixed(2)), rate: effectiveRate };
+    } catch(e) {
+      console.warn('FX conversion failed, using original amount:', e);
+      return { amountConverted: amount, rate: 1.0 };
+    }
   }
 
   function saveUIState(){
@@ -4693,6 +4723,7 @@
         { key: 'item', label: 'Item', kind: 'text', placeholder: 'e.g. Bluetooth speaker', required: true },
         { key: 'qty', label: 'Qty', kind: 'number', placeholder: '1', default: '1' },
         { key: 'price', label: 'Buy price (each)', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'currency', label: 'Currency', kind: 'select', options: ['GBP','USD','EUR','JPY','CAD','AUD','CHF','CNY'], default: 'GBP' },
         { key: 'site', label: 'Sourced from', kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Received','Listed','Pending','Cancelled','Returned'], default: 'Pending' },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
@@ -5047,7 +5078,7 @@
     editingEntryId = null;
   }
 
-  function saveAddModal(){
+  async function saveAddModal(){
     if(!activeModalConfig) return;
     var values = {};
     var missingRequired = false;
@@ -5064,13 +5095,27 @@
 
     var entryDate = values.purchasedOn || values.date;
 
+    // Auto-convert price to GBP if a foreign currency is selected
+    var rawPrice = parseFloat(values.price) || 0;
+    var selectedCurrency = values.currency || 'GBP';
+    var convertedPrice = rawPrice;
+    var exchangeRateUsed = 1.0;
+
+    if(selectedCurrency && selectedCurrency !== 'GBP' && rawPrice > 0) {
+      showToast('Converting ' + selectedCurrency + ' to GBP...');
+      var conversion = await convertToHomeCurrency(rawPrice, selectedCurrency, 'GBP', entryDate ? parseDateSafe(entryDate) : 'latest');
+      convertedPrice = conversion.amountConverted;
+      exchangeRateUsed = conversion.rate;
+      showToast(selectedCurrency + ' ' + rawPrice.toFixed(2) + ' → £' + convertedPrice.toFixed(2) + ' (rate: ' + exchangeRateUsed + ')');
+    }
+
     var configKeys = {};
     activeModalConfig.fields.forEach(function(f){ configKeys[f.key] = true; });
 
     var row = {
       item: values.item,
       qty: parseFloat(values.qty) || 1,
-      price: parseFloat(values.price) || 0,
+      price: convertedPrice, // always stored in GBP
       type: activeModalConfig.type,
       date: entryDate ? parseDateSafe(entryDate) : todayISO(),
       status: values.status || undefined
@@ -5082,6 +5127,10 @@
     if(configKeys.cardUsed) row.cardUsed = values.cardUsed || '';
     if(configKeys.email) row.email = values.email || '';
     if(configKeys.notes) row.notes = values.notes || '';
+    if(selectedCurrency !== 'GBP' && exchangeRateUsed !== 1.0){
+      var fxNote = selectedCurrency + ' ' + rawPrice.toFixed(2) + ' @ ' + exchangeRateUsed;
+      row.notes = row.notes ? row.notes + ' | FX: ' + fxNote : 'FX: ' + fxNote;
+    }
     if(configKeys.platform) row.platform = values.platform || undefined;
     if(configKeys.postage) row.postage = values.postage ? parseFloat(values.postage) || 0 : 0;
     if(configKeys.matchedItem) row.matchedItem = values.matchedItem || null;
