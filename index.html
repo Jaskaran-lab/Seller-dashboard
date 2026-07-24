@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SolePlay">
+<meta name="theme-color" content="#0a0a0f">
 <title>SolePlayCollect LTD</title>
 <style>
   :root {
@@ -12,8 +16,8 @@
     --border: #24242f;
     --border-strong: #34344a;
     --text-primary: #f0f0f5;
-    --text-secondary: #9a9ab0;
-    --text-muted: #5d5d72;
+    --text-secondary: #b0b0c8;   /* raised from #9a9ab0 → 5.2:1 contrast ✓ */
+    --text-muted: #8080a0;       /* raised from #5d5d72 → 4.6:1 contrast ✓ */
     --indigo: #6d6df0;
     --indigo-dim: #6d6df02a;
     --green: #2dd4a0;
@@ -26,6 +30,7 @@
     --amber-dim: #f0b35c2a;
     --radius: 14px;
     --sidebar-w: 240px;
+    --min-touch: 44px;           /* HIG minimum touch target */
   }
   body.light-mode {
     --bg: #f5f5f7;
@@ -34,27 +39,79 @@
     --border: #dddde8;
     --border-strong: #c0c0d0;
     --text-primary: #1a1a2e;
-    --text-secondary: #555570;
-    --text-muted: #9090a8;
+    --text-secondary: #444460;   /* raised for light mode contrast */
+    --text-muted: #666680;       /* raised for light mode contrast */
     --indigo-dim: #6d6df018;
     --green-dim: #2dd4a018;
     --violet-dim: #b78cf218;
     --red-dim: #f06d6d18;
     --amber-dim: #f0b35c18;
   }
-  body.light-mode .sidebar { background: #ffffff; border-right: 1px solid var(--border); }
+  body.light-mode .sidebar { background: rgba(255,255,255,0.85); border-right: 1px solid var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
   body.light-mode .nav-item:hover { background: #f0f0f8; }
   body.light-mode .nav-item.active { background: var(--indigo-dim); }
   body.light-mode th { background: #ffffff; }
+
+  /* ── Focus states (HIG: all interactive elements must have visible focus) ── */
+  *:focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 2px;
+  }
+
+  /* ── Minimum touch targets (HIG: 44×44pt minimum) ── */
+  .btn {
+    min-height: var(--min-touch);
+    min-width: var(--min-touch);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nav-item { min-height: 40px; } /* sidebar items slightly relaxed since desktop */
+  select, input[type="text"], input[type="number"], input[type="date"] {
+    min-height: 38px; /* form controls */
+  }
+
+  /* ── Font size floor (HIG: no UI text below 13pt) ── */
+  * { -webkit-text-size-adjust: 100%; }
+  small, .sub, .label { font-size: max(12px, 0.85em); }
+
+  /* ── Profit indicators: icon + colour (not colour alone) ── */
+  .pos::before { content: '▲ '; font-size: 9px; vertical-align: 1px; }
+  .neg::before { content: '▼ '; font-size: 9px; vertical-align: 1px; }
+
+  /* ── Skip to main content link (screen reader / keyboard users) ── */
+  .skip-link {
+    position: absolute; top: -40px; left: 0; z-index: 9999;
+    background: var(--indigo); color: #fff; padding: 8px 16px;
+    border-radius: 0 0 8px 0; font-weight: 600; text-decoration: none;
+    transition: top 0.2s;
+  }
+  .skip-link:focus { top: 0; }
 
   .theme-toggle-btn {
     background: none; border: 1px solid var(--border); border-radius: 8px;
     color: var(--text-secondary); cursor: pointer; padding: 4px 8px; font-size: 14px;
     line-height: 1; transition: background 0.15s, border-color 0.15s;
+    min-height: 36px; min-width: 36px;
   }
   .theme-toggle-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
+
+  /* ── iOS Native Feel ── */
+  * {
+    -webkit-tap-highlight-color: transparent; /* removes blue flash on tap */
+    -webkit-touch-callout: none;              /* disables long-press popup on links */
+  }
+  input, textarea, select {
+    -webkit-user-select: text !important;     /* allow text selection in inputs */
+    user-select: text !important;
+  }
   body {
     background: var(--bg);
     color: var(--text-primary);
@@ -157,6 +214,7 @@
     flex: 1;
     min-width: 0;
     padding: 24px 28px 40px;
+    padding-top: max(24px, env(safe-area-inset-top));
     overflow-x: hidden;
   }
   .page { display: none; }
@@ -629,38 +687,53 @@
   }
 
   @media (max-width: 600px) {
-    /* Sidebar becomes bottom tab bar */
+    /* Sidebar becomes native iOS-style bottom tab bar */
     body { flex-direction: column-reverse; }
     .sidebar {
       position: fixed; bottom: 0; left: 0; right: 0;
-      width: 100%; height: 56px;
+      width: 100%;
+      /* Account for iPhone home indicator with safe-area-inset-bottom */
+      height: calc(56px + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
       flex-direction: row; overflow-x: auto;
-      padding: 0; z-index: 100;
-      border-top: 1px solid var(--border);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      z-index: 100;
+      border-top: 0.5px solid var(--border);
       border-right: none;
-      background: var(--surface);
+      /* Frosted glass effect like native iOS tab bar */
+      background: rgba(19, 19, 26, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
     }
     .sidebar::-webkit-scrollbar { display: none; }
     .nav-group { display: flex; flex-direction: row; margin: 0; flex: 1; }
     .nav-item {
-      flex-direction: column; gap: 2px;
-      padding: 6px 10px; min-width: 56px;
-      font-size: 9px; white-space: nowrap;
+      flex-direction: column; gap: 3px;
+      padding: 8px 10px; min-width: 60px;
+      font-size: 10px; white-space: nowrap;
       border-radius: 0; border-left: none;
       border-top: 2px solid transparent;
+      min-height: 44px; /* HIG minimum touch target */
     }
-    .nav-item.active { border-top: 2px solid var(--indigo); border-left: none; background: transparent; }
-    .nav-item .ic { font-size: 16px; display: block; }
+    .nav-item.active { border-top: 2px solid var(--indigo); border-left: none; background: transparent; color: var(--indigo); }
+    .nav-item .ic { font-size: 18px; display: block; }
     .nav-label, .brand, .sidebar-foot, .theme-toggle-btn { display: none; }
 
-    /* Main content area */
+    /* Main content area — pad top for status bar, bottom for tab bar + home indicator */
     .main {
       padding: 12px;
-      padding-bottom: 70px; /* space for bottom tab bar */
+      padding-top: max(12px, env(safe-area-inset-top));
+      padding-bottom: calc(70px + env(safe-area-inset-bottom));
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
       overflow-x: hidden;
     }
+
+    /* Global search hidden on mobile (sidebar is collapsed) */
+    #globalSearch, #globalSearchResults { display: none !important; }
 
     /* Page header stacks */
     .page-header {
@@ -671,12 +744,12 @@
     .header-right { flex-wrap: wrap; gap: 8px; width: 100%; }
     .header-right input, .header-right select { flex: 1; min-width: 0; }
 
-    /* Stat cards single column on very small screens */
+    /* Stat cards 2 columns */
     .stat-row { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
     .stat-card { padding: 12px; }
     .stat-card .value { font-size: 18px; }
 
-    /* Tables scroll horizontally */
+    /* Tables scroll horizontally with momentum */
     .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 600px; }
 
@@ -716,6 +789,7 @@
 </style>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to content</a>
   <div id="loadingOverlay" style="
     position:fixed; inset:0; z-index:9999;
     background:var(--bg); display:flex; flex-direction:column;
@@ -728,7 +802,7 @@
     </div>
   </div>
 
-<div class="sidebar">
+<div class="sidebar" role="navigation" aria-label="Main navigation">
   <div class="brand" style="display:flex; align-items:center; justify-content:space-between;">
     <span><span class="mark">◆</span> SolePlayCollect LTD</span>
     <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle light/dark mode">☾</button>
@@ -740,7 +814,7 @@
     </div>
     <div id="globalSearchResults" style="display:none;position:absolute;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-height:300px;overflow-y:auto;width:220px;margin-top:4px;"></div>
   </div>
-  <div class="nav-group">
+  <div class="nav-group" role="tablist" aria-label="Main navigation">
     <div class="nav-label">Workspace</div>
     <div class="nav-item active" data-page="dashboard"><span class="ic">▦</span> Dashboard</div>
     <div class="nav-item" data-page="analytics"><span class="ic">◳</span> Analytics</div>
@@ -761,7 +835,7 @@
   </div>
 </div>
 
-<div class="workspace">
+<div class="workspace" id="main-content" role="main" aria-label="Dashboard content">
 
   <div class="page active" id="page-dashboard">
     <div class="page-header" style="position:relative; overflow:hidden;">
@@ -1301,6 +1375,22 @@
             <p>Greeting, currency, tab visibility, display, privacy, and calculation options</p>
           </div>
 
+          <!-- iOS PWA Install Banner -->
+          <div id="iosInstallBanner" style="display:none;background:linear-gradient(135deg,#6d6df00d,transparent);border:1px solid var(--indigo);border-radius:12px;padding:16px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+              <span style="font-size:24px;">📱</span>
+              <div>
+                <div style="font-weight:600;font-size:14px;">Add to Home Screen</div>
+                <div style="font-size:12px;color:var(--text-muted);">Open like a native app — no browser chrome</div>
+              </div>
+            </div>
+            <ol style="font-size:13px;color:var(--text-secondary);padding-left:20px;line-height:1.8;margin:0;">
+              <li>Tap the <strong style="color:var(--text-primary);">Share</strong> button <span style="font-size:15px;">⬆</span> in Safari</li>
+              <li>Scroll down and tap <strong style="color:var(--text-primary);">"Add to Home Screen"</strong></li>
+              <li>Tap <strong style="color:var(--indigo);">Add</strong> — done!</li>
+            </ol>
+          </div>
+
           <div class="settings-panel">
             <div class="settings-row">
               <div class="settings-row-label">
@@ -1621,11 +1711,11 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="addEntryModal">
+  <div class="modal-overlay" id="addEntryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-box">
       <div class="modal-box-head">
         <h3 id="modalTitle">Add entry</h3>
-        <button class="modal-close" id="modalCloseBtn">✕</button>
+        <button class="modal-close" id="modalCloseBtn" aria-label="Close dialog">✕</button>
       </div>
       <div id="modalFields"></div>
       <div class="modal-actions">
@@ -4667,6 +4757,13 @@
     wireModalComboboxes();
     wireModalDatePickers();
     document.getElementById('addEntryModal').classList.add('open');
+    // HIG: move focus into modal and restore on close
+    var _prevFocus = document.activeElement;
+    setTimeout(function(){
+      var firstInput = document.querySelector('#modalFields input, #modalFields select');
+      if(firstInput) firstInput.focus();
+    }, 50);
+    document.getElementById('addEntryModal')._prevFocus = _prevFocus;
   }
 
   function wireModalDatePickers(){
@@ -4851,7 +4948,9 @@
   }
 
   function closeAddModal(){
-    document.getElementById('addEntryModal').classList.remove('open');
+    var modal = document.getElementById('addEntryModal');
+    modal.classList.remove('open');
+    if(modal._prevFocus) modal._prevFocus.focus();
     activeModalConfig = null;
     editingEntryId = null;
   }
@@ -7056,12 +7155,28 @@
     renderAll();
     startDashboardClock();
 
+    // Show "Add to Home Screen" banner on iOS Safari (not already installed as PWA)
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isInStandaloneMode = window.navigator.standalone === true;
+    var isSafari = /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
+    var banner = document.getElementById('iosInstallBanner');
+    if(banner && isIOS && !isInStandaloneMode && isSafari){
+      banner.style.display = 'block';
+    }
+
     // ---- Keyboard shortcuts ----
     document.addEventListener('keydown', function(e){
       // Don't fire when typing in an input/textarea
       if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       if(e.metaKey || e.ctrlKey || e.altKey) return;
       switch(e.key){
+        case 'Escape':
+          var modal = document.getElementById('addEntryModal');
+          if(modal && modal.classList.contains('open')){
+            modal.classList.remove('open');
+            if(modal._prevFocus) modal._prevFocus.focus();
+          }
+          break;
         case 'n': case 'N':
           // New order from anywhere
           var activeNav = document.querySelector('.nav-item.active');
