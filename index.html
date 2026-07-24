@@ -1647,13 +1647,15 @@
   var BACKUP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4e_1inv-Pg0N48ZXKt9rIli74R5e4Q9OsaZwRfSYpxRv4s3cvXTB4gMDDvOVrDuI/exec';
 
   // ============================================================
-  // TRACKING — carrier API credentials and config
+  // TRACKING — carrier config (Royal Mail uses link only, DHL uses API)
   // ============================================================
-  var ROYAL_MAIL_CLIENT_ID     = 'e92a904b3bdd0918354f5f1d6a76aaf9';
-  var ROYAL_MAIL_CLIENT_SECRET = '82f1bf613f84cafabce1aedc743afc1f';
-  var DHL_API_KEY              = 'kcsi2GQuj7wsEEiWVeHhktrxEYEqGiEA';
-  var _royalMailToken = null;
-  var _royalMailTokenExpiry = 0;
+  var DHL_API_KEY = 'kcsi2GQuj7wsEEiWVeHhktrxEYEqGiEA';
+  var _trackingStatuses = JSON.parse(localStorage.getItem('inventory:trackingStatuses') || '{}');
+
+  function saveTrackingStatus(trackingNum, status){
+    _trackingStatuses[trackingNum] = status;
+    localStorage.setItem('inventory:trackingStatuses', JSON.stringify(_trackingStatuses));
+  }
 
   // Carrier detection by tracking number format
   var CARRIER_PATTERNS = [
@@ -1677,78 +1679,6 @@
       if(CARRIER_PATTERNS[i].regex.test(n)) return CARRIER_PATTERNS[i];
     }
     return { carrier: 'Unknown', color: '#888', track: null };
-  }
-
-  async function getRoyalMailToken() {
-    if(_royalMailToken && Date.now() < _royalMailTokenExpiry) return _royalMailToken;
-    try {
-      // Try both possible OAuth endpoints
-      var endpoints = [
-        'https://api.royalmail.net/oauth2/token',
-        'https://authentication.royalmail.net/token'
-      ];
-      for(var i = 0; i < endpoints.length; i++){
-        var res = await fetch(endpoints[i], {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'grant_type=client_credentials&client_id=' + ROYAL_MAIL_CLIENT_ID + '&client_secret=' + ROYAL_MAIL_CLIENT_SECRET
-        });
-        if(res.ok){
-          var data = await res.json();
-          if(data.access_token){
-            _royalMailToken = data.access_token;
-            _royalMailTokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
-            return _royalMailToken;
-          }
-        }
-      }
-    } catch(e) { console.warn('Royal Mail token error:', e); }
-    return null;
-  }
-
-  async function fetchRoyalMailStatus(trackingNum) {
-    try {
-      var token = await getRoyalMailToken();
-      if(!token){
-        // Token failed — return null so we fall back to tracking link
-        return null;
-      }
-      // Try both v1 and v2 tracking endpoints
-      var endpoints = [
-        'https://api.royalmail.net/shipping/v3/trackings/' + encodeURIComponent(trackingNum),
-        'https://api.royalmail.net/mailpieces/v2/' + encodeURIComponent(trackingNum) + '/events'
-      ];
-      for(var i = 0; i < endpoints.length; i++){
-        var res = await fetch(endpoints[i], {
-          headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'X-Accept-RMG-Terms': 'yes' }
-        });
-        if(res.ok){
-          var data = await res.json();
-          if(data && data.mailPieces && data.mailPieces[0]){
-            var mp = data.mailPieces[0];
-            var events = mp.events || [];
-            var latest = events[0];
-            return {
-              status: mp.summary && mp.summary.statusDescription || 'Unknown',
-              location: latest && latest.locationName || '',
-              timestamp: latest && latest.eventDateTime || '',
-              events: events.slice(0,5)
-            };
-          }
-          if(data && data.mailPieceId){
-            var events2 = data.events || [];
-            var latest2 = events2[0];
-            return {
-              status: latest2 && latest2.eventName || 'Unknown',
-              location: latest2 && latest2.locationName || '',
-              timestamp: latest2 && latest2.eventDateTime || '',
-              events: events2.slice(0,5).map(function(ev){ return { eventDateTime: ev.eventDateTime, eventDescription: ev.eventName }; })
-            };
-          }
-        }
-      }
-    } catch(e) { console.warn('Royal Mail tracking error:', e); }
-    return null;
   }
 
   async function fetchDHLStatus(trackingNum) {
@@ -1897,12 +1827,14 @@
 
     wrap.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">Fetching live data for ' + tracked.length + ' shipment(s)...</div>';
 
-    // Fetch statuses in parallel
+    // Fetch statuses in parallel — DHL has live API, others use manual status
     var results = await Promise.all(tracked.map(async function(t){
       var carrierInfo = detectCarrier(t.num);
       var status = null;
-      if(carrierInfo && carrierInfo.carrier === 'Royal Mail') status = await fetchRoyalMailStatus(t.num);
-      else if(carrierInfo && carrierInfo.carrier === 'DHL') status = await fetchDHLStatus(t.num);
+      var manualStatus = _trackingStatuses[t.num] || null;
+      if(carrierInfo && carrierInfo.carrier === 'DHL') status = await fetchDHLStatus(t.num);
+      // If we have a manual status override, use it
+      if(!status && manualStatus) status = { status: manualStatus, location: '', timestamp: '', events: [] };
       return { t: t, carrier: carrierInfo, status: status };
     }));
 
@@ -1954,6 +1886,14 @@
         results.map(function(r){ return trackingCardHtml(r); }).join('') +
         '</div>';
     }
+
+    // Wire manual status dropdowns
+    wrap.querySelectorAll('.tracking-status-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        saveTrackingStatus(this.getAttribute('data-tnum'), this.value);
+        renderTrackingPage();
+      });
+    });
   }
 
   function trackingRowHtml(r) {
@@ -1982,7 +1922,15 @@
         '</div>' +
         '<span style="font-size:11px;font-weight:600;color:'+color+';">'+escapeHtml(carrierName)+'</span>' +
       '</div>' +
-      '<div style="margin-bottom:10px;">'+(r.status?statusBadgeHtml(r.status.status):statusBadgeHtml('No data'))+(r.status&&r.status.location?' <span style="font-size:11px;color:var(--text-muted);">· '+escapeHtml(r.status.location)+'</span>':'')+'</div>' +
+      '<div style="margin-bottom:10px;">'+(r.status?statusBadgeHtml(r.status.status):statusBadgeHtml('Unknown'))+(r.status&&r.status.location?' <span style="font-size:11px;color:var(--text-muted);">· '+escapeHtml(r.status.location)+'</span>':'')+'</div>' +
+      '<div style="margin-bottom:8px;">' +
+        '<select class="tracking-status-select" data-tnum="'+escapeAttr(r.t.num)+'" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);">' +
+          ['Unknown','Ordered','In Transit','Out for Delivery','Delivered','Collection Failed','Returned'].map(function(s){
+            var cur = _trackingStatuses[r.t.num]||'Unknown';
+            return '<option value="'+escapeHtml(s)+'"'+(cur===s?' selected':'')+'>'+escapeHtml(s)+'</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
       (r.status&&r.status.events&&r.status.events.length
         ? '<div style="font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' +
           r.status.events.slice(0,2).map(function(ev){ return '<div style="padding:2px 0;">'+escapeHtml((ev.eventDateTime||'').slice(0,16).replace('T',' '))+' — '+escapeHtml(ev.eventDescription||'')+'</div>'; }).join('') +
