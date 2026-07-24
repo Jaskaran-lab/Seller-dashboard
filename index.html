@@ -733,6 +733,13 @@
     <span><span class="mark">◆</span> SolePlayCollect LTD</span>
     <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle light/dark mode">☾</button>
   </div>
+  <div style="padding:0 8px 8px;">
+    <div style="position:relative;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:13px;">🔍</span>
+      <input type="text" id="globalSearch" placeholder="Search everything..." style="padding:7px 10px 7px 30px;font-size:12px;width:100%;box-sizing:border-box;border-radius:8px;">
+    </div>
+    <div id="globalSearchResults" style="display:none;position:absolute;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-height:300px;overflow-y:auto;width:220px;margin-top:4px;"></div>
+  </div>
   <div class="nav-group">
     <div class="nav-label">Workspace</div>
     <div class="nav-item active" data-page="dashboard"><span class="ic">▦</span> Dashboard</div>
@@ -762,7 +769,8 @@
       <div style="position:relative; z-index:1;">
         <div id="dashboardGreeting" style="color:var(--text-secondary); font-size:13px; margin-bottom:4px;">DASHBOARD</div>
         <h1 id="dashboardGreetingMain">Good day</h1>
-        <p>💡 Days Held shows how long each item has sat in stock.</p>
+        <div id="dashboardTodaySummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+        <p>💡 Press <kbd style="background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:11px;">N</kbd> to add a new entry · <kbd style="background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:11px;">1-5</kbd> to switch pages</p>
       </div>
       <div class="header-right" style="position:relative;z-index:1;flex-direction:column; align-items:flex-end; gap:2px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 16px;">
         <div style="display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">
@@ -1649,7 +1657,6 @@
   // ============================================================
   // TRACKING — carrier config (Royal Mail uses link only, DHL uses API)
   // ============================================================
-  var DHL_API_KEY = 'kcsi2GQuj7wsEEiWVeHhktrxEYEqGiEA';
   var _trackingStatuses = JSON.parse(localStorage.getItem('inventory:trackingStatuses') || '{}');
 
   function saveTrackingStatus(trackingNum, status){
@@ -1679,36 +1686,6 @@
       if(CARRIER_PATTERNS[i].regex.test(n)) return CARRIER_PATTERNS[i];
     }
     return { carrier: 'Unknown', color: '#888', track: null };
-  }
-
-  async function fetchDHLStatus(trackingNum) {
-    try {
-      var res = await fetch('https://api-eu.dhl.com/track/shipments?trackingNumber=' + encodeURIComponent(trackingNum), {
-        headers: {
-          'DHL-API-Key': DHL_API_KEY,
-          'Accept': 'application/json'
-        }
-      });
-      if(!res.ok) return null;
-      var data = await res.json();
-      if(data && data.shipments && data.shipments[0]){
-        var ship = data.shipments[0];
-        var events = ship.events || [];
-        var latest = events[0];
-        return {
-          status: ship.status && ship.status.description || (latest && latest.description) || 'Unknown',
-          location: latest && latest.location && latest.location.address && latest.location.address.addressLocality || '',
-          timestamp: latest && latest.timestamp ? latest.timestamp.slice(0,10) : '',
-          events: events.slice(0, 5).map(function(ev){
-            return {
-              eventDateTime: ev.timestamp ? ev.timestamp.slice(0,16).replace('T',' ') : '',
-              eventDescription: ev.description || ''
-            };
-          })
-        };
-      }
-    } catch(e) { console.warn('DHL tracking error:', e); }
-    return null;
   }
 
   function getTrackingLink(trackingNum, carrierInfo) {
@@ -1780,7 +1757,7 @@
     } catch(e) {}
   }
 
-  async function renderTrackingPage() {
+  function renderTrackingPage() {
     var wrap = document.getElementById('trackingWrap');
     if(!wrap) return;
 
@@ -1825,18 +1802,14 @@
       return;
     }
 
-    wrap.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">Fetching live data for ' + tracked.length + ' shipment(s)...</div>';
 
-    // Fetch statuses in parallel — DHL has live API, others use manual status
-    var results = await Promise.all(tracked.map(async function(t){
+    // Build results using manual statuses only — no external API calls
+    var results = tracked.map(function(t){
       var carrierInfo = detectCarrier(t.num);
-      var status = null;
       var manualStatus = _trackingStatuses[t.num] || null;
-      if(carrierInfo && carrierInfo.carrier === 'DHL') status = await fetchDHLStatus(t.num);
-      // If we have a manual status override, use it
-      if(!status && manualStatus) status = { status: manualStatus, location: '', timestamp: '', events: [] };
+      var status = manualStatus ? { status: manualStatus, location: '', timestamp: '', events: [] } : null;
       return { t: t, carrier: carrierInfo, status: status };
-    }));
+    });
 
     // Update stat cards
     var total = results.length;
@@ -2748,60 +2721,6 @@
     return label.charAt(0).toUpperCase() + label.slice(1);
   }
 
-  function renderInventoryEditPanel(itemName, ri){
-    var el = document.getElementById('invEditPanel'+ri);
-    var received = 0, listed = 0, sold = 0;
-    entries.forEach(function(e){
-      var key = (e.type === 'sale' && e.matchedItem) ? e.matchedItem : e.item;
-      if(key !== itemName) return;
-      if(e.type === 'purchase'){
-        var st = effectiveStatus(e);
-        if(st === 'Received') received += e.qty;
-        else if(st === 'Listed') listed += e.qty;
-      } else {
-        sold += e.qty;
-      }
-    });
-    var inStock = received + listed - sold;
-    var unmatchedSales = entries.filter(function(e){ return e.type === 'sale' && !e.matchedItem && e.item !== itemName; });
-
-    el.style.cssText = 'background:var(--surface-2); padding:14px 16px; border-bottom:1px solid var(--border);';
-    el.innerHTML =
-      '<div style="display:flex; gap:24px; flex-wrap:wrap;">' +
-        '<div>' +
-          '<label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Adjust stock (currently '+inStock+')</label>' +
-          '<div style="display:flex; gap:6px;">' +
-            '<input type="number" id="invStockAdjust'+ri+'" placeholder="e.g. -1 or +2" style="width:110px;">' +
-            '<button class="btn btn-primary" style="padding:7px 12px;font-size:12px;" id="invApplyStockAdjust'+ri+'">Apply</button>' +
-          '</div>' +
-          '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Logs a correction entry (damage, miscount, found stock) — does not edit past purchases.</div>' +
-        '</div>' +
-        '<div style="flex:1; min-width:240px;">' +
-          '<label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Link an existing unmatched sale to this item</label>' +
-          '<select id="invLinkSaleSelect'+ri+'" style="width:100%;">' +
-            '<option value="">'+(unmatchedSales.length ? 'Choose a sale...' : 'No unmatched sales available')+'</option>' +
-            unmatchedSales.map(function(s){ return '<option value="'+s.id+'">'+escapeHtml(s.item)+' — '+fmtMoney(s.price)+' on '+s.date+'</option>'; }).join('') +
-          '</select>' +
-          '<button class="btn btn-primary" style="padding:7px 12px;font-size:12px;margin-top:6px;" id="invApplyLinkSale'+ri+'">Link</button>' +
-        '</div>' +
-      '</div>';
-
-    document.getElementById('invApplyStockAdjust'+ri).addEventListener('click', function(){
-      var val = parseFloat(document.getElementById('invStockAdjust'+ri).value);
-      if(!val || isNaN(val)){ showToast('Enter a non-zero number.', true); return; }
-      if(val > 0) commitRows([{ item: itemName, qty: val, price: 0, type: 'purchase', date: todayISO() }]);
-      else commitRows([{ item: itemName, qty: Math.abs(val), price: 0, type: 'sale', date: todayISO(), matchedItem: itemName }]);
-      showToast('Stock adjusted by '+(val>0?'+':'')+val+'.');
-    });
-
-    document.getElementById('invApplyLinkSale'+ri).addEventListener('click', function(){
-      var saleId = document.getElementById('invLinkSaleSelect'+ri).value;
-      if(!saleId){ showToast('Choose a sale to link.', true); return; }
-      var entry = entries.find(function(e){ return e.id === saleId; });
-      if(entry){ entry.matchedItem = itemName; saveEntries(); renderAll(); showToast('Sale linked to '+itemName+'.'); }
-    });
-  }
-
   // ---------- Analytics page ----------
   var analyticsCharts = {};
 
@@ -3255,6 +3174,21 @@
     var timeWord = hour < 12 ? 'morning' : (hour < 18 ? 'afternoon' : 'evening');
     var name = prefs.greetingName ? ', ' + prefs.greetingName : '';
     document.getElementById('dashboardGreetingMain').textContent = 'Good ' + timeWord + name;
+
+    // Today's quick summary strip
+    var todayISO2 = todayISO();
+    var todaySales = entries.filter(function(e){ return e.type==='sale' && e.date && e.date.slice(0,10)===todayISO2; });
+    var todayOrders = entries.filter(function(e){ return e.type==='purchase' && (e.purchasedOn||e.date||'').slice(0,10)===todayISO2; });
+    var todayRevenue = todaySales.reduce(function(s,e){ return s+saleRevenue(e); },0);
+    var summaryEl = document.getElementById('dashboardTodaySummary');
+    if(summaryEl){
+      var summaryItems = [];
+      if(todayOrders.length) summaryItems.push('<span>📥 <strong>'+todayOrders.length+'</strong> order'+(todayOrders.length===1?'':'s')+' today</span>');
+      if(todaySales.length) summaryItems.push('<span>💰 <strong style="color:var(--green);">'+fmtMoney(todayRevenue)+'</strong> revenue today</span>');
+      var pendingCount = entries.filter(function(e){ return e.type==='purchase' && effectiveStatus(e)==='Pending'; }).length;
+      if(pendingCount) summaryItems.push('<span>⏳ <strong>'+pendingCount+'</strong> pending</span>');
+      summaryEl.innerHTML = summaryItems.length ? summaryItems.join('<span style="opacity:0.3;">·</span>') : '<span>Nothing recorded today yet</span>';
+    }
 
     renderOverviewStatRow();
     renderBestSeller();
@@ -4189,17 +4123,6 @@
         deleteEntry(this.getAttribute('data-delete-entry'), this.getAttribute('data-delete-label'));
       });
     });
-  }
-
-    function updateOrderField(el){
-    var id = el.getAttribute('data-order-id');
-    var field = el.getAttribute('data-order-field');
-    var entry = entries.find(function(e){ return e.id === id; });
-    if(!entry) return;
-    entry[field] = el.value;
-    saveEntries();
-    // Status changes affect stock counts dashboard-wide, so re-render everything.
-    renderAll();
   }
 
   // ---------- Managed lists (Retailers, Brands, Emails, Banks & Cards, Sales Platforms) ----------
@@ -5423,16 +5346,6 @@
         deleteEntry(this.getAttribute('data-delete-entry'), this.getAttribute('data-delete-label'));
       });
     });
-  }
-
-    function updateSaleField(el){
-    var id = el.getAttribute('data-sale-id');
-    var field = el.getAttribute('data-sale-field');
-    var entry = entries.find(function(e){ return e.id === id; });
-    if(!entry) return;
-    entry[field] = el.value;
-    saveEntries();
-    renderSalesTable();
   }
 
   document.getElementById('salesSearch').addEventListener('input', renderSalesTable);
@@ -7052,6 +6965,60 @@
   });
 
   document.getElementById('themeToggleBtn').addEventListener('click', function(){
+
+  // ---- Global search ----
+  var globalSearchEl = document.getElementById('globalSearch');
+  var globalResultsEl = document.getElementById('globalSearchResults');
+
+  globalSearchEl.addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    if(q.length < 2){ globalResultsEl.style.display='none'; return; }
+
+    var results = entries.filter(function(e){
+      return (e.item||'').toLowerCase().indexOf(q) !== -1 ||
+             String(e.orderNumber||'').toLowerCase().indexOf(q) !== -1 ||
+             (e.site||'').toLowerCase().indexOf(q) !== -1 ||
+             (e.notes||'').toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 8);
+
+    if(!results.length){ globalResultsEl.style.display='none'; return; }
+
+    var TYPE_ICON = { purchase:'📦', sale:'💰', expense:'💸', income:'↗', ticket:'🎟' };
+    var TYPE_PAGE = { purchase:'orders', sale:'sales', expense:'expenses', income:'income', ticket:'inventory' };
+
+    globalResultsEl.innerHTML = results.map(function(e){
+      var icon = TYPE_ICON[e.type] || '·';
+      var sub = [e.site, fmtDateUK(e.purchasedOn||e.date)].filter(Boolean).join(' · ');
+      return '<div class="global-result-item" data-page="'+TYPE_PAGE[e.type]+'" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span>'+icon+'</span>' +
+          '<div style="min-width:0;">' +
+            '<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(e.item)+'</div>' +
+            '<div style="color:var(--text-muted);font-size:11px;">'+escapeHtml(sub)+'</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    globalResultsEl.style.display = 'block';
+
+    globalResultsEl.querySelectorAll('.global-result-item').forEach(function(item){
+      item.addEventListener('mouseenter', function(){ this.style.background='var(--surface-2)'; });
+      item.addEventListener('mouseleave', function(){ this.style.background=''; });
+      item.addEventListener('click', function(){
+        var page = this.getAttribute('data-page');
+        document.querySelector('.nav-item[data-page="'+page+'"]').click();
+        globalSearchEl.value = '';
+        globalResultsEl.style.display = 'none';
+      });
+    });
+  });
+
+  document.addEventListener('click', function(e){
+    if(!globalSearchEl.contains(e.target) && !globalResultsEl.contains(e.target)){
+      globalResultsEl.style.display = 'none';
+    }
+  });
     prefs.lightMode = !prefs.lightMode;
     applyPrefs();
     savePrefs();
@@ -7088,6 +7055,38 @@
     initSettingsPage();
     renderAll();
     startDashboardClock();
+
+    // ---- Keyboard shortcuts ----
+    document.addEventListener('keydown', function(e){
+      // Don't fire when typing in an input/textarea
+      if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if(e.metaKey || e.ctrlKey || e.altKey) return;
+      switch(e.key){
+        case 'n': case 'N':
+          // New order from anywhere
+          var activeNav = document.querySelector('.nav-item.active');
+          var activePage = activeNav ? activeNav.getAttribute('data-page') : 'orders';
+          var modalMap = { orders:'order', sales:'sale', expenses:'expense', income:'income', inventory:'inventoryAdjust' };
+          openAddModal(modalMap[activePage] || 'order');
+          break;
+        case '1': document.querySelector('.nav-item[data-page="dashboard"]').click(); break;
+        case '2': document.querySelector('.nav-item[data-page="orders"]').click(); break;
+        case '3': document.querySelector('.nav-item[data-page="sales"]').click(); break;
+        case '4': document.querySelector('.nav-item[data-page="inventory"]').click(); break;
+        case '5': document.querySelector('.nav-item[data-page="tracking"]').click(); break;
+      }
+    });
+
+    // ---- Auto-refresh from KV store every 5 minutes ----
+    // Picks up new email-scanned orders without needing a page reload
+    setInterval(async function(){
+      var added = await syncFromSheet();
+      if(added > 0){
+        await loadEntries();
+        renderAll();
+        showToast(added + ' new order'+(added===1?'':'s')+' synced from email scanner ✓');
+      }
+    }, 5 * 60 * 1000);
     setLoadingStatus('Ready ✓', 100);
     setTimeout(function(){
       var overlay = document.getElementById('loadingOverlay');
