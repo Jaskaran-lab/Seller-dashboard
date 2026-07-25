@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SolePlay">
@@ -888,7 +889,7 @@
     align-items:center; justify-content:center; gap:16px;
   ">
     <div style="font-size:28px; font-weight:700; color:var(--text-primary);">◆ Seller Dashboard</div>
-    <div style="color:var(--text-muted); font-size:13px;" id="loadingStatus">Connecting to cloud storage…</div>
+    <div style="color:var(--text-muted); font-size:13px;" id="loadingStatus">Loading…</div>
     <div style="width:180px; height:3px; background:var(--surface-2); border-radius:99px; overflow:hidden;">
       <div id="loadingBar" style="height:100%; width:0%; background:var(--indigo); border-radius:99px; transition:width 0.4s ease;"></div>
     </div>
@@ -923,7 +924,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.10</span>
+    <span class="version-pill">v2.11</span>
   </div>
 </div>
 
@@ -1865,6 +1866,24 @@
       console.warn('FX conversion failed, using original amount:', e);
       return { amountConverted: amount, rate: 1.0 };
     }
+  }
+
+  function loadUIState(){
+    try {
+      var raw = localStorage.getItem(UI_STATE_KEY);
+      if(!raw) return;
+      var s = JSON.parse(raw);
+      if(s.trackingView)       _trackingView       = s.trackingView;
+      if(s.ordersPageSize)     _ordersPageSize     = s.ordersPageSize;
+      if(s.invPageSize)        _invPageSize        = s.invPageSize;
+      if(s.salesPageSize)      _salesPageSize      = s.salesPageSize;
+      if(s.expensesType)       _expensesType       = s.expensesType;
+      if(s.expensesView)       _expensesView       = s.expensesView;
+      if(s.tableSortState)     tableSortState      = s.tableSortState;
+      if(s.ordersStatusFilter) ordersStatusFilter  = s.ordersStatusFilter;
+      if(s.invStatusFilter)    invStatusFilter     = s.invStatusFilter;
+      if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
+    } catch(e) { console.warn('Could not load UI state:', e); }
   }
 
   function saveUIState(){
