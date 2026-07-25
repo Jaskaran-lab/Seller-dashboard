@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.4</span>
+    <span class="version-pill">v2.5</span>
   </div>
 </div>
 
@@ -1836,6 +1836,90 @@
   // not by file identity.
   // ============================================================
   var BACKUP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4e_1inv-Pg0N48ZXKt9rIli74R5e4Q9OsaZwRfSYpxRv4s3cvXTB4gMDDvOVrDuI/exec';
+  var EBAY_APP_ID = 'Jaskaran-SellerDa-PRD-a62565322-c5b15191';
+
+  // Cache market prices for the session so repeated clicks don't re-fetch
+  var _ebayPriceCache = {};
+
+  async function fetchEbayMarketPrice(itemName) {
+    if(_ebayPriceCache[itemName]) return _ebayPriceCache[itemName];
+
+    // Clean up item name for better eBay search results
+    var query = itemName
+      .replace(/\(.*?\)/g, '')           // remove parenthetical details
+      .replace(/[®™©]/g, '')             // remove trademark symbols
+      .replace(/\s{2,}/g, ' ')           // collapse spaces
+      .trim()
+      .slice(0, 80);                     // eBay query max
+
+    try {
+      var url = 'https://api.ebay.com/buy/browse/v1/item_summary/search' +
+        '?q=' + encodeURIComponent(query) +
+        '&filter=conditions:{NEW|USED_EXCELLENT|USED_VERY_GOOD},buyingOptions:{FIXED_PRICE}' +
+        '&sort=price' +
+        '&limit=10' +
+        '&fieldgroups=MATCHING_ITEMS';
+
+      var res = await fetch(url, {
+        headers: {
+          'Authorization': 'Bearer ' + EBAY_APP_ID,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // eBay Browse API requires OAuth — use App ID via a different approach
+      // Fall back to the Finding API which accepts App ID directly
+      if(!res.ok){
+        var findUrl = 'https://svcs.ebay.com/services/search/FindingService/v1' +
+          '?OPERATION-NAME=findItemsByKeywords' +
+          '&SERVICE-VERSION=1.0.0' +
+          '&SECURITY-APPNAME=' + EBAY_APP_ID +
+          '&RESPONSE-DATA-FORMAT=JSON' +
+          '&REST-PAYLOAD' +
+          '&keywords=' + encodeURIComponent(query) +
+          '&itemFilter(0).name=ListingType&itemFilter(0).value=FixedPrice' +
+          '&itemFilter(1).name=HideDuplicateItems&itemFilter(1).value=true' +
+          '&sortOrder=PricePlusShippingLowest' +
+          '&paginationInput.entriesPerPage=10';
+
+        var findRes = await fetch(findUrl);
+        if(!findRes.ok) throw new Error('eBay API ' + findRes.status);
+        var findData = await findRes.json();
+
+        var items = findData
+          ?.findItemsByKeywordsResponse?.[0]
+          ?.searchResult?.[0]
+          ?.item || [];
+
+        if(!items.length) {
+          _ebayPriceCache[itemName] = null;
+          return null;
+        }
+
+        var prices = items.map(function(item){
+          var price = parseFloat(item?.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0);
+          var ship  = parseFloat(item?.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0);
+          return price + ship;
+        }).filter(function(p){ return p > 0; }).sort(function(a,b){ return a-b; });
+
+        if(!prices.length) return null;
+
+        var result = {
+          low:    prices[0],
+          high:   prices[prices.length-1],
+          median: prices[Math.floor(prices.length/2)],
+          count:  prices.length,
+          query:  query
+        };
+        _ebayPriceCache[itemName] = result;
+        return result;
+      }
+    } catch(e) {
+      console.warn('eBay price check failed for "' + itemName + '":', e.message);
+      return null;
+    }
+  }
 
   // ============================================================
   // TRACKING — carrier config (Royal Mail uses link only, DHL uses API)
@@ -5432,16 +5516,17 @@
     var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue'];
 
     var headerRow = buildSortableHeader('inventory', [
-      { label: 'ID',          width: '70px' },
-      { label: 'Title',       sortKey: 'item',       width: '300px' },
-      { label: 'Status',      sortKey: 'status',     width: '150px' },
-      { label: 'Date Bought', sortKey: 'dateBought', width: '110px' },
-      { label: 'Days Held',   sortKey: 'daysHeld',   width: '90px', cls: 'right' },
-      { label: 'In Stock',    sortKey: 'stock',       width: '80px', cls: 'right' },
-      { label: 'Sold',        sortKey: 'sold',        width: '60px', cls: 'right' },
-      { label: 'Buy Price',   sortKey: 'buyPrice',    width: '100px', cls: 'right' },
-      { label: 'Retailer',    sortKey: 'site',        width: '130px' },
-      { label: '',            width: '120px' }
+      { label: 'ID',           width: '70px' },
+      { label: 'Title',        sortKey: 'item',       width: '240px' },
+      { label: 'Status',       sortKey: 'status',     width: '150px' },
+      { label: 'Date Bought',  sortKey: 'dateBought', width: '110px' },
+      { label: 'Days Held',    sortKey: 'daysHeld',   width: '90px', cls: 'right' },
+      { label: 'In Stock',     sortKey: 'stock',       width: '75px', cls: 'right' },
+      { label: 'Sold',         sortKey: 'sold',        width: '55px', cls: 'right' },
+      { label: 'Buy Price',    sortKey: 'buyPrice',    width: '90px', cls: 'right' },
+      { label: 'Market Price',                         width: '140px', cls: 'right' },
+      { label: 'Retailer',     sortKey: 'site',        width: '110px' },
+      { label: '',             width: '120px' }
     ]);
 
     var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
@@ -5463,8 +5548,9 @@
           '<td class="right" style="font-weight:600;">'+(inStock<0?'<span style="color:var(--red);">'+inStock+'</span>':inStock)+'</td>' +
           '<td class="right" style="color:var(--text-muted);">'+r.soldQty+'</td>' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(r.buyPrice)+'</td>' +
-          '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(r.site||'—')+'</td>' +
-          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Del</button></td>' +
+          '<td class="right" id="mktprice-'+escapeAttr(r.item)+'" style="font-size:11px;color:var(--text-muted);">—</td>' +
+          '<td>'+escapeHtml(r.site||'—')+'</td>' +
+          '<td class="center"><button class="btn" style="padding:4px 8px;font-size:11px;" data-check-price="'+escapeAttr(r.item)+'">£?</button> <button class="btn" style="padding:4px 8px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 8px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Del</button></td>' +
         '</tr>';
       }).join('') + '</tbody></table>';
 
@@ -5519,6 +5605,34 @@
         });
         document.body.appendChild(dd);
         setTimeout(function(){ document.addEventListener('click',function rm(){ dd.remove(); document.removeEventListener('click',rm); }); },10);
+      });
+    });
+
+    wrap.querySelectorAll('[data-check-price]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var itemName = this.getAttribute('data-check-price');
+        var cell = document.getElementById('mktprice-' + itemName);
+        if(!cell) return;
+        this.textContent = '...';
+        this.disabled = true;
+        var result = await fetchEbayMarketPrice(itemName);
+        this.textContent = '£?';
+        this.disabled = false;
+        if(!result){
+          cell.innerHTML = '<span style="color:var(--text-muted);">No results</span>';
+          return;
+        }
+        // Find buy price for this item
+        var buyPrice = entries.filter(function(e){ return e.type==='purchase' && e.item===itemName; })
+          .reduce(function(s,e){ return s + (e.price||0); }, 0) /
+          Math.max(entries.filter(function(e){ return e.type==='purchase' && e.item===itemName; }).length, 1);
+
+        var margin = buyPrice > 0 ? ((result.median - buyPrice) / buyPrice * 100).toFixed(0) : null;
+        var marginCol = margin !== null ? (parseFloat(margin) >= 0 ? 'var(--green)' : 'var(--red)') : '';
+        cell.innerHTML =
+          '<div style="font-weight:600;font-size:12px;color:var(--text-primary);">'+fmtMoney(result.median)+'</div>' +
+          '<div style="font-size:10px;color:var(--text-muted);">'+fmtMoney(result.low)+' – '+fmtMoney(result.high)+' ('+result.count+')</div>' +
+          (margin !== null ? '<div style="font-size:10px;font-weight:600;color:'+marginCol+';">'+(parseFloat(margin)>=0?'+':'')+margin+'% margin</div>' : '');
       });
     });
 
