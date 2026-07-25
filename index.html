@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.6</span>
+    <span class="version-pill">v2.7</span>
   </div>
 </div>
 
@@ -1844,79 +1844,28 @@
   async function fetchEbayMarketPrice(itemName) {
     if(_ebayPriceCache[itemName]) return _ebayPriceCache[itemName];
 
-    // Clean up item name for better eBay search results
-    var query = itemName
-      .replace(/\(.*?\)/g, '')           // remove parenthetical details
-      .replace(/[®™©]/g, '')             // remove trademark symbols
-      .replace(/\s{2,}/g, ' ')           // collapse spaces
-      .trim()
-      .slice(0, 80);                     // eBay query max
-
     try {
-      var url = 'https://api.ebay.com/buy/browse/v1/item_summary/search' +
-        '?q=' + encodeURIComponent(query) +
-        '&filter=conditions:{NEW|USED_EXCELLENT|USED_VERY_GOOD},buyingOptions:{FIXED_PRICE}' +
-        '&sort=price' +
-        '&limit=10' +
-        '&fieldgroups=MATCHING_ITEMS';
+      var url = BACKUP_SCRIPT_URL + '?action=ebayprice&q=' + encodeURIComponent(itemName);
+      var res = await fetch(url, { redirect: 'follow' });
+      var data = await res.json();
 
-      var res = await fetch(url, {
-        headers: {
-          'Authorization': 'Bearer ' + EBAY_APP_ID,
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      // eBay Browse API requires OAuth — use App ID via a different approach
-      // Fall back to the Finding API which accepts App ID directly
-      if(!res.ok){
-        var findUrl = 'https://svcs.ebay.com/services/search/FindingService/v1' +
-          '?OPERATION-NAME=findItemsByKeywords' +
-          '&SERVICE-VERSION=1.0.0' +
-          '&SECURITY-APPNAME=' + EBAY_APP_ID +
-          '&RESPONSE-DATA-FORMAT=JSON' +
-          '&REST-PAYLOAD' +
-          '&keywords=' + encodeURIComponent(query) +
-          '&itemFilter(0).name=ListingType&itemFilter(0).value=FixedPrice' +
-          '&itemFilter(1).name=HideDuplicateItems&itemFilter(1).value=true' +
-          '&sortOrder=PricePlusShippingLowest' +
-          '&paginationInput.entriesPerPage=10';
-
-        var findRes = await fetch(findUrl);
-        if(!findRes.ok) throw new Error('eBay API ' + findRes.status);
-        var findData = await findRes.json();
-
-        var items = findData
-          ?.findItemsByKeywordsResponse?.[0]
-          ?.searchResult?.[0]
-          ?.item || [];
-
-        if(!items.length) {
-          _ebayPriceCache[itemName] = null;
-          return null;
-        }
-
-        var prices = items.map(function(item){
-          var price = parseFloat(item?.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0);
-          var ship  = parseFloat(item?.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0);
-          return price + ship;
-        }).filter(function(p){ return p > 0; }).sort(function(a,b){ return a-b; });
-
-        if(!prices.length) return null;
-
-        var result = {
-          low:    prices[0],
-          high:   prices[prices.length-1],
-          median: prices[Math.floor(prices.length/2)],
-          count:  prices.length,
-          query:  query
-        };
-        _ebayPriceCache[itemName] = result;
-        return result;
+      if(data.error || !data.count) {
+        _ebayPriceCache[itemName] = null;
+        return null;
       }
+
+      var result = {
+        low:    data.low,
+        high:   data.high,
+        median: data.median,
+        count:  data.count,
+        prices: data.prices || [],
+        query:  data.query
+      };
+      _ebayPriceCache[itemName] = result;
+      return result;
     } catch(e) {
-      console.warn('eBay price check failed for "' + itemName + '":', e.message);
+      console.warn('eBay price check failed:', e.message);
       return null;
     }
   }
