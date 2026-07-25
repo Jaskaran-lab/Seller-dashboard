@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.7</span>
+    <span class="version-pill">v2.8</span>
   </div>
 </div>
 
@@ -5578,10 +5578,15 @@
 
         var margin = buyPrice > 0 ? ((result.median - buyPrice) / buyPrice * 100).toFixed(0) : null;
         var marginCol = margin !== null ? (parseFloat(margin) >= 0 ? 'var(--green)' : 'var(--red)') : '';
+        var sourceLabel = result.source === 'sold' ? '✓ sold' : '~ listed';
+        var sourceCol = result.source === 'sold' ? 'var(--green)' : 'var(--text-muted)';
         cell.innerHTML =
-          '<div style="font-weight:600;font-size:12px;color:var(--text-primary);">'+fmtMoney(result.median)+'</div>' +
+          '<div style="font-weight:600;font-size:12px;color:var(--text-primary);">'+fmtMoney(result.average || result.median)+'</div>' +
           '<div style="font-size:10px;color:var(--text-muted);">'+fmtMoney(result.low)+' – '+fmtMoney(result.high)+' ('+result.count+')</div>' +
-          (margin !== null ? '<div style="font-size:10px;font-weight:600;color:'+marginCol+';">'+(parseFloat(margin)>=0?'+':'')+margin+'% margin</div>' : '');
+          '<div style="font-size:10px;">' +
+            '<span style="color:'+sourceCol+';">'+sourceLabel+'</span>' +
+            (margin !== null ? ' · <span style="font-weight:600;color:'+marginCol+'">'+(parseFloat(margin)>=0?'+':'')+margin+'%</span>' : '') +
+          '</div>';
       });
     });
 
