@@ -923,7 +923,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.8</span>
+    <span class="version-pill">v2.9</span>
   </div>
 </div>
 
@@ -1836,125 +1836,6 @@
   // not by file identity.
   // ============================================================
   var BACKUP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4e_1inv-Pg0N48ZXKt9rIli74R5e4Q9OsaZwRfSYpxRv4s3cvXTB4gMDDvOVrDuI/exec';
-  var EBAY_APP_ID = 'Jaskaran-SellerDa-PRD-a62565322-c5b15191';
-
-  // Cache market prices for the session so repeated clicks don't re-fetch
-  var _ebayPriceCache = {};
-
-  async function fetchEbayMarketPrice(itemName) {
-    if(_ebayPriceCache[itemName]) return _ebayPriceCache[itemName];
-
-    try {
-      var url = BACKUP_SCRIPT_URL + '?action=ebayprice&q=' + encodeURIComponent(itemName);
-      var res = await fetch(url, { redirect: 'follow' });
-      var data = await res.json();
-
-      if(data.error || !data.count) {
-        _ebayPriceCache[itemName] = null;
-        return null;
-      }
-
-      var result = {
-        low:    data.low,
-        high:   data.high,
-        median: data.median,
-        count:  data.count,
-        prices: data.prices || [],
-        query:  data.query
-      };
-      _ebayPriceCache[itemName] = result;
-      return result;
-    } catch(e) {
-      console.warn('eBay price check failed:', e.message);
-      return null;
-    }
-  }
-
-  // ============================================================
-  // TRACKING — carrier config (Royal Mail uses link only, DHL uses API)
-  // ============================================================
-  var _trackingStatuses = JSON.parse(localStorage.getItem('inventory:trackingStatuses') || '{}');
-
-  function saveTrackingStatus(trackingNum, status){
-    _trackingStatuses[trackingNum] = status;
-    localStorage.setItem('inventory:trackingStatuses', JSON.stringify(_trackingStatuses));
-  }
-
-  // Carrier detection by tracking number format
-  var CARRIER_PATTERNS = [
-    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}GB$/i,          color: '#e60026', track: 'https://www.royalmail.com/track-your-item#/tracking-results/{n}' },
-    { carrier: 'Royal Mail',  regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/i,    color: '#e60026', track: 'https://www.royalmail.com/track-your-item#/tracking-results/{n}' },
-    { carrier: 'Evri',        regex: /^[HJ][0-9A-Z]{15,}$/i,         color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
-    { carrier: 'Evri',        regex: /^[A-Z]{3}\d{9}$/i,             color: '#9747ff', track: 'https://www.evri.com/track/parcel/{n}' },
-    { carrier: 'DHL',         regex: /^\d{10,11}$/,                   color: '#ffcc00', track: 'api' },
-    { carrier: 'DHL',         regex: /^JD\d{18}$/i,                   color: '#ffcc00', track: 'api' },
-    { carrier: 'UPS',         regex: /^1Z[A-Z0-9]{16}$/i,            color: '#351c15', track: 'https://www.ups.com/track?tracknum={n}' },
-    { carrier: 'DPD',         regex: /^\d{14,15}$/,                   color: '#dc0032', track: 'https://www.dpd.co.uk/service/track?parcelNumber={n}' },
-    { carrier: 'ParcelForce', regex: /^[A-Z]{2}\d{7}$/i,             color: '#003087', track: 'https://www.parcelforce.com/track-trace?trackNumber={n}' },
-    { carrier: 'Amazon',      regex: /^TBA\d{12}$/i,                  color: '#ff9900', track: 'https://www.amazon.co.uk/progress-tracker?ref=pe_2025041_233263010&orderID={n}' },
-    { carrier: 'Yodel',       regex: /^JJD\d{18}$/i,                  color: '#00aeef', track: 'https://www.yodel.co.uk/tracking/{n}' },
-  ];
-
-  function detectCarrier(trackingNum) {
-    if(!trackingNum) return null;
-    var n = trackingNum.trim();
-    for(var i = 0; i < CARRIER_PATTERNS.length; i++){
-      if(CARRIER_PATTERNS[i].regex.test(n)) return CARRIER_PATTERNS[i];
-    }
-    return { carrier: 'Unknown', color: '#888', track: null };
-  }
-
-  function getTrackingLink(trackingNum, carrierInfo) {
-    if(!carrierInfo) return null;
-    if(carrierInfo.carrier === 'DHL'){
-      return 'https://www.dhl.com/gb-en/home/tracking.html?tracking-id=' + encodeURIComponent(trackingNum);
-    }
-    if(!carrierInfo.track || carrierInfo.track === 'api') return null;
-    return carrierInfo.track.replace('{n}', encodeURIComponent(trackingNum));
-  }
-
-  function statusBadgeHtml(status) {
-    var s = (status || '').toLowerCase();
-    var color = 'var(--text-muted)', bg = 'var(--surface-2)';
-    if(s.includes('deliver') || s.includes('arrived')) { color = 'var(--green)'; bg = 'var(--green-dim)'; }
-    else if(s.includes('transit') || s.includes('progress') || s.includes('dispatch') || s.includes('sort')) { color = 'var(--amber)'; bg = 'var(--amber-dim)'; }
-    else if(s.includes('out for') || s.includes('with courier')) { color = 'var(--indigo)'; bg = 'var(--indigo-dim)'; }
-    else if(s.includes('exception') || s.includes('failed') || s.includes('return')) { color = 'var(--red)'; bg = 'var(--red-dim)'; }
-    return '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:'+bg+';color:'+color+';">'+escapeHtml(status||'Unknown')+'</span>';
-  }
-
-  var _trackingView = 'flow';
-  var _manualTrackingNumbers = JSON.parse(localStorage.getItem('inventory:manualTracking') || '[]');
-
-  function saveManualTracking(){
-    localStorage.setItem('inventory:manualTracking', JSON.stringify(_manualTrackingNumbers));
-    console.log('Saved tracking numbers:', _manualTrackingNumbers.length, JSON.stringify(_manualTrackingNumbers));
-  }
-
-  // ============================================================
-  // UI STATE PERSISTENCE
-  // Saves/loads all user preferences (page sizes, filters, views,
-  // sort states) to localStorage so they survive file updates.
-  // ============================================================
-  var UI_STATE_KEY = 'inventory:uiState';
-
-  function loadUIState(){
-    try {
-      var raw = localStorage.getItem(UI_STATE_KEY);
-      if(!raw) return;
-      var s = JSON.parse(raw);
-      if(s.trackingView)    _trackingView    = s.trackingView;
-      if(s.ordersPageSize)  _ordersPageSize  = s.ordersPageSize;
-      if(s.invPageSize)     _invPageSize     = s.invPageSize;
-      if(s.salesPageSize)   _salesPageSize   = s.salesPageSize;
-      if(s.expensesType)    _expensesType    = s.expensesType;
-      if(s.expensesView)    _expensesView    = s.expensesView;
-      if(s.tableSortState)  tableSortState   = s.tableSortState;
-      if(s.ordersStatusFilter) ordersStatusFilter = s.ordersStatusFilter;
-      if(s.invStatusFilter)    invStatusFilter    = s.invStatusFilter;
-      if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
-    } catch(e) { console.warn('Could not load UI state:', e); }
-  }
 
   // ============================================================
   // CURRENCY CONVERSION — Frankfurter API (free, no key needed)
@@ -5466,16 +5347,15 @@
 
     var headerRow = buildSortableHeader('inventory', [
       { label: 'ID',           width: '70px' },
-      { label: 'Title',        sortKey: 'item',       width: '240px' },
+      { label: 'Title',        sortKey: 'item',       width: '280px' },
       { label: 'Status',       sortKey: 'status',     width: '150px' },
       { label: 'Date Bought',  sortKey: 'dateBought', width: '110px' },
       { label: 'Days Held',    sortKey: 'daysHeld',   width: '90px', cls: 'right' },
-      { label: 'In Stock',     sortKey: 'stock',       width: '75px', cls: 'right' },
-      { label: 'Sold',         sortKey: 'sold',        width: '55px', cls: 'right' },
-      { label: 'Buy Price',    sortKey: 'buyPrice',    width: '90px', cls: 'right' },
-      { label: 'Market Price',                         width: '140px', cls: 'right' },
-      { label: 'Retailer',     sortKey: 'site',        width: '110px' },
-      { label: '',             width: '120px' }
+      { label: 'In Stock',     sortKey: 'stock',       width: '80px', cls: 'right' },
+      { label: 'Sold',         sortKey: 'sold',        width: '60px', cls: 'right' },
+      { label: 'Buy Price',    sortKey: 'buyPrice',    width: '100px', cls: 'right' },
+      { label: 'Retailer',     sortKey: 'site',        width: '120px' },
+      { label: '',             width: '130px' }
     ]);
 
     var tableHtml = '<table style="table-layout:fixed;width:100%;"><thead>'+headerRow+'</thead><tbody>' +
@@ -5499,7 +5379,10 @@
           '<td class="right" style="font-weight:500;">'+fmtMoney(r.buyPrice)+'</td>' +
           '<td class="right" id="mktprice-'+escapeAttr(r.item)+'" style="font-size:11px;color:var(--text-muted);">—</td>' +
           '<td>'+escapeHtml(r.site||'—')+'</td>' +
-          '<td class="center"><button class="btn" style="padding:4px 8px;font-size:11px;" data-check-price="'+escapeAttr(r.item)+'">£?</button> <button class="btn" style="padding:4px 8px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 8px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Del</button></td>' +
+          '<td class="center" style="white-space:nowrap;">' +
+          '<a href="https://www.ebay.co.uk/sch/i.html?_nkw='+encodeURIComponent(r.item)+'&LH_Sold=1&LH_Complete=1&LH_BIN=1&LH_PrefLoc=1" target="_blank" class="btn" style="padding:4px 8px;font-size:11px;text-decoration:none;" title="Search eBay sold listings">eBay</a> ' +
+          '<button class="btn" style="padding:4px 8px;font-size:12px;" data-edit-row="'+ri+'">Edit</button> ' +
+          '<button class="btn btn-danger-ghost" style="padding:4px 8px;font-size:12px;" data-delete-item="'+escapeAttr(r.item)+'">Del</button></td>' +
         '</tr>';
       }).join('') + '</tbody></table>';
 
@@ -5554,39 +5437,6 @@
         });
         document.body.appendChild(dd);
         setTimeout(function(){ document.addEventListener('click',function rm(){ dd.remove(); document.removeEventListener('click',rm); }); },10);
-      });
-    });
-
-    wrap.querySelectorAll('[data-check-price]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var itemName = this.getAttribute('data-check-price');
-        var cell = document.getElementById('mktprice-' + itemName);
-        if(!cell) return;
-        this.textContent = '...';
-        this.disabled = true;
-        var result = await fetchEbayMarketPrice(itemName);
-        this.textContent = '£?';
-        this.disabled = false;
-        if(!result){
-          cell.innerHTML = '<span style="color:var(--text-muted);">No results</span>';
-          return;
-        }
-        // Find buy price for this item
-        var buyPrice = entries.filter(function(e){ return e.type==='purchase' && e.item===itemName; })
-          .reduce(function(s,e){ return s + (e.price||0); }, 0) /
-          Math.max(entries.filter(function(e){ return e.type==='purchase' && e.item===itemName; }).length, 1);
-
-        var margin = buyPrice > 0 ? ((result.median - buyPrice) / buyPrice * 100).toFixed(0) : null;
-        var marginCol = margin !== null ? (parseFloat(margin) >= 0 ? 'var(--green)' : 'var(--red)') : '';
-        var sourceLabel = result.source === 'sold' ? '✓ sold' : '~ listed';
-        var sourceCol = result.source === 'sold' ? 'var(--green)' : 'var(--text-muted)';
-        cell.innerHTML =
-          '<div style="font-weight:600;font-size:12px;color:var(--text-primary);">'+fmtMoney(result.average || result.median)+'</div>' +
-          '<div style="font-size:10px;color:var(--text-muted);">'+fmtMoney(result.low)+' – '+fmtMoney(result.high)+' ('+result.count+')</div>' +
-          '<div style="font-size:10px;">' +
-            '<span style="color:'+sourceCol+';">'+sourceLabel+'</span>' +
-            (margin !== null ? ' · <span style="font-weight:600;color:'+marginCol+'">'+(parseFloat(margin)>=0?'+':'')+margin+'%</span>' : '') +
-          '</div>';
       });
     });
 
