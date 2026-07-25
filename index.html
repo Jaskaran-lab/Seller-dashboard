@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.16</span>
+    <span class="version-pill">v2.17</span>
   </div>
 </div>
 
@@ -1199,37 +1199,9 @@
     <div class="page-header">
       <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
       <div class="header-right">
-        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:200px;">
-        <button class="btn" id="invSnapshotBtn" title="Take a named inventory snapshot">📷 Snapshot</button>
+        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
         <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
       </div>
-    </div>
-
-    <!-- Inventory check / snapshot bar -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;">
-      <span style="font-size:12px;font-weight:600;color:var(--text-muted);">INVENTORY CHECK</span>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <label style="font-size:12px;color:var(--text-muted);">As of date:</label>
-        <input type="date" id="invCheckDate" style="font-size:12px;padding:4px 8px;max-width:140px;">
-        <button class="btn" id="invCheckApplyBtn" style="font-size:12px;padding:4px 12px;">Apply</button>
-        <button class="btn" id="invCheckClearBtn" style="font-size:12px;padding:4px 12px;display:none;">✕ Clear</button>
-      </div>
-      <div style="height:20px;width:1px;background:var(--border);"></div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <label style="font-size:12px;color:var(--text-muted);">Saved snapshots:</label>
-        <select id="invSnapshotSelect" style="font-size:12px;padding:4px 8px;max-width:180px;">
-          <option value="">Select a snapshot...</option>
-        </select>
-        <button class="btn" id="invSnapshotLoadBtn" style="font-size:12px;padding:4px 10px;">Load</button>
-        <button class="btn" id="invSnapshotExportBtn" style="font-size:12px;padding:4px 10px;">↓ CSV</button>
-        <button class="btn btn-danger-ghost" id="invSnapshotDeleteBtn" style="font-size:12px;padding:4px 10px;">Delete</button>
-      </div>
-    </div>
-
-    <!-- Active snapshot banner -->
-    <div id="invSnapshotBanner" style="display:none;background:var(--indigo-dim);border:1px solid var(--indigo);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-      <span id="invSnapshotBannerText" style="font-size:13px;color:var(--indigo);font-weight:600;"></span>
-      <button class="btn" id="invSnapshotExitBtn" style="font-size:12px;padding:4px 10px;">Exit snapshot view</button>
     </div>
 
     <div class="tabs">
@@ -1769,6 +1741,30 @@
                 <div class="settings-row-sub">Always on — any import matching an existing entry on item, date, and price gets flagged for you to confirm before it's added.</div>
               </div>
             </div>
+          </div>
+
+          <!-- Inventory Snapshot -->
+          <div class="settings-panel" style="margin-top:16px;">
+            <div class="settings-row" style="align-items:flex-start;">
+              <div class="settings-row-label">
+                <div class="settings-row-title">Inventory Snapshots</div>
+                <div class="settings-row-sub">Take a point-in-time snapshot of your stock for annual stocktakes, HMRC valuation, or insurance. Pick an "as of" date, name the snapshot, and export as CSV.</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:12px;color:var(--text-muted);">As of date:</label>
+                <input type="date" id="settingsSnapshotDate" style="font-size:12px;padding:5px 10px;">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:12px;color:var(--text-muted);">Name:</label>
+                <input type="text" id="settingsSnapshotName" placeholder="e.g. HMRC Stocktake 2026" style="font-size:12px;padding:5px 10px;max-width:220px;">
+              </div>
+              <button class="btn btn-primary" id="settingsTakeSnapshotBtn" style="font-size:12px;">📷 Take Snapshot</button>
+            </div>
+
+            <div id="settingsSnapshotList" style="margin-top:16px;"></div>
           </div>
         </div>
 
@@ -5637,16 +5633,6 @@
     return Object.values(byItem).filter(function(r){ return r.qty > 0; });
   }
 
-  function populateSnapshotSelect() {
-    var sel = document.getElementById('invSnapshotSelect');
-    if(!sel) return;
-    var snaps = loadSnapshots();
-    sel.innerHTML = '<option value="">Select a snapshot...</option>' +
-      snaps.map(function(s){
-        return '<option value="'+escapeAttr(s.name)+'">'+escapeHtml(s.name)+' — '+escapeHtml(s.date)+'</option>';
-      }).join('');
-  }
-
   function exportSnapshotCSV(rows, name) {
     var csv = ['Item,Qty,Buy Price,Total Value,Status,Retailer,Date Bought,Order #'];
     rows.forEach(function(r){
@@ -5660,86 +5646,72 @@
     a.click();
   }
 
-  // Wire snapshot controls
-  document.getElementById('invSnapshotBtn').addEventListener('click', function(){
-    var name = prompt('Name this snapshot (e.g. "Pre-Christmas 2026"):');
-    if(!name || !name.trim()) return;
-    var asOf = document.getElementById('invCheckDate').value || todayISO();
-    var rows = buildInventorySnapshot(asOf);
-    var snap = { name: name.trim(), date: asOf, createdAt: new Date().toISOString(), rows: rows };
+  function renderSettingsSnapshotList() {
+    var el = document.getElementById('settingsSnapshotList');
+    if(!el) return;
     var snaps = loadSnapshots();
-    // Replace if same name
-    var idx = snaps.findIndex(function(s){ return s.name === snap.name; });
+    if(!snaps.length){
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">No snapshots saved yet.</div>';
+      return;
+    }
+    el.innerHTML = snaps.map(function(s){
+      var totalValue = s.rows.reduce(function(t,r){ return t+(r.qty||0)*(r.price||0); }, 0);
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--border);">'+
+        '<div style="flex:1;">'+
+          '<div style="font-weight:600;font-size:13px;">'+escapeHtml(s.name)+'</div>'+
+          '<div style="font-size:11px;color:var(--text-muted);">As of '+fmtDateUK(s.date)+' · '+s.rows.length+' items · '+fmtMoney(totalValue)+' value</div>'+
+        '</div>'+
+        '<button class="btn" style="font-size:12px;padding:4px 10px;" data-snap-export="'+escapeAttr(s.name)+'">↓ CSV</button>'+
+        '<button class="btn btn-danger-ghost" style="font-size:12px;padding:4px 10px;" data-snap-delete="'+escapeAttr(s.name)+'">Delete</button>'+
+      '</div>';
+    }).join('');
+
+    el.querySelectorAll('[data-snap-export]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var name = this.getAttribute('data-snap-export');
+        var snap = loadSnapshots().find(function(s){ return s.name===name; });
+        if(snap) exportSnapshotCSV(snap.rows, snap.name);
+      });
+    });
+    el.querySelectorAll('[data-snap-delete]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var name = this.getAttribute('data-snap-delete');
+        if(!confirm('Delete snapshot "'+name+'"?')) return;
+        saveSnapshots(loadSnapshots().filter(function(s){ return s.name!==name; }));
+        renderSettingsSnapshotList();
+        showToast('Snapshot deleted');
+      });
+    });
+  }
+
+  document.getElementById('settingsTakeSnapshotBtn').addEventListener('click', function(){
+    var name = document.getElementById('settingsSnapshotName').value.trim();
+    var date = document.getElementById('settingsSnapshotDate').value || todayISO();
+    if(!name){ showToast('Please enter a name for the snapshot', true); return; }
+    var rows = buildInventorySnapshot(date);
+    var snap = { name: name, date: date, createdAt: new Date().toISOString(), rows: rows };
+    var snaps = loadSnapshots();
+    var idx   = snaps.findIndex(function(s){ return s.name===name; });
     if(idx !== -1) snaps[idx] = snap; else snaps.unshift(snap);
     saveSnapshots(snaps);
-    populateSnapshotSelect();
-    showToast('Snapshot "'+snap.name+'" saved ('+rows.length+' items)');
+    renderSettingsSnapshotList();
+    document.getElementById('settingsSnapshotName').value = '';
+    showToast('Snapshot "'+name+'" saved · '+rows.length+' items · '+fmtMoney(rows.reduce(function(t,r){return t+(r.qty||0)*(r.price||0);},0)));
   });
 
-  document.getElementById('invCheckApplyBtn').addEventListener('click', function(){
-    var d = document.getElementById('invCheckDate').value;
-    if(!d){ showToast('Please select a date first', true); return; }
-    _invCheckDate = d;
-    document.getElementById('invCheckClearBtn').style.display = '';
-    var banner = document.getElementById('invSnapshotBanner');
-    document.getElementById('invSnapshotBannerText').textContent = '📅 Showing inventory as of '+fmtDateUK(d);
-    banner.style.display = 'flex';
-    renderInventoryPage();
+  // Set default date to today
+  var snapDateEl = document.getElementById('settingsSnapshotDate');
+  if(snapDateEl) snapDateEl.value = todayISO();
+
+  // Render snapshot list when settings data tab is opened
+  document.querySelectorAll('[data-settings-section]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if(this.getAttribute('data-settings-section') === 'data') renderSettingsSnapshotList();
+    });
   });
 
-  document.getElementById('invCheckClearBtn').addEventListener('click', function(){
-    _invCheckDate = null;
-    _activeSnapshot = null;
-    this.style.display = 'none';
-    document.getElementById('invCheckDate').value = '';
-    document.getElementById('invSnapshotBanner').style.display = 'none';
-    renderInventoryPage();
-  });
-
-  document.getElementById('invSnapshotLoadBtn').addEventListener('click', function(){
-    var name = document.getElementById('invSnapshotSelect').value;
-    if(!name){ showToast('Select a snapshot first', true); return; }
-    var snap = loadSnapshots().find(function(s){ return s.name === name; });
-    if(!snap) return;
-    _activeSnapshot = snap;
-    _invCheckDate = snap.date;
-    document.getElementById('invCheckDate').value = snap.date;
-    document.getElementById('invCheckClearBtn').style.display = '';
-    var banner = document.getElementById('invSnapshotBanner');
-    document.getElementById('invSnapshotBannerText').textContent = '📷 Snapshot: "'+snap.name+'" — '+fmtDateUK(snap.date)+' ('+snap.rows.length+' items)';
-    banner.style.display = 'flex';
-    renderInventoryPage();
-  });
-
-  document.getElementById('invSnapshotExportBtn').addEventListener('click', function(){
-    var name = document.getElementById('invSnapshotSelect').value;
-    var snaps = loadSnapshots();
-    var snap = snaps.find(function(s){ return s.name === name; });
-    var rows = snap ? snap.rows : buildInventorySnapshot(_invCheckDate || todayISO());
-    exportSnapshotCSV(rows, name || 'current');
-  });
-
-  document.getElementById('invSnapshotDeleteBtn').addEventListener('click', function(){
-    var name = document.getElementById('invSnapshotSelect').value;
-    if(!name){ showToast('Select a snapshot to delete', true); return; }
-    if(!confirm('Delete snapshot "'+name+'"?')) return;
-    var snaps = loadSnapshots().filter(function(s){ return s.name !== name; });
-    saveSnapshots(snaps);
-    populateSnapshotSelect();
-    showToast('Snapshot deleted');
-  });
-
-  document.getElementById('invSnapshotExitBtn') && document.getElementById('invSnapshotExitBtn').addEventListener('click', function(){
-    _invCheckDate = null;
-    _activeSnapshot = null;
-    document.getElementById('invCheckDate').value = '';
-    document.getElementById('invCheckClearBtn').style.display = 'none';
-    document.getElementById('invSnapshotBanner').style.display = 'none';
-    renderInventoryPage();
-  });
-
-  // Populate snapshot select on load
-  populateSnapshotSelect();
+  // Populate on load if data section is already active
+  renderSettingsSnapshotList();
 
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
