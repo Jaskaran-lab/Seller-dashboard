@@ -18,11 +18,11 @@ CONFIG = {
     "ICLOUD_PASS":      os.environ.get("ICLOUD_PASS", ""),
     "IMAP_FOLDER":      "2026",
     "CLAUDE_API_KEY":   os.environ.get("CLAUDE_API_KEY", ""),
-    "SHEET_ID":         "1-fVjwOnf2CFZWDeDZzmUZ6Qhn1mCj4k8wPakGsFiQW4",
+    "SHEET_ID":         os.environ.get("SHEET_ID", ""),
     "CREDENTIALS_FILE": "credentials.json",
     "ENTRIES_SHEET":    "Entries",
     "PROCESSED_SHEET":  "Processed",
-    "APPS_SCRIPT_URL":  "https://script.google.com/macros/s/AKfycbz4e_1inv-Pg0N48ZXKt9rIli74R5e4Q9OsaZwRfSYpxRv4s3cvXTB4gMDDvOVrDuI/exec",
+    "APPS_SCRIPT_URL":  os.environ.get("APPS_SCRIPT_URL", ""),
 }
 
 ENTRY_COLS = [
@@ -268,7 +268,7 @@ def build_entry(p, subject):
 
 def sync_once():
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting iCloud sync...")
-    missing = [k for k in ["ICLOUD_EMAIL","ICLOUD_PASS","CLAUDE_API_KEY"] if not CONFIG[k]]
+    missing = [k for k in ["ICLOUD_EMAIL","ICLOUD_PASS","CLAUDE_API_KEY","SHEET_ID","APPS_SCRIPT_URL"] if not CONFIG[k]]
     if missing:
         print(f"ERROR: Missing config: {', '.join(missing)}")
         sys.exit(1)

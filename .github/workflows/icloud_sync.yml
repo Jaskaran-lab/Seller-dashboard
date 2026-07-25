@@ -3,7 +3,7 @@ name: iCloud Email Sync
 on:
   schedule:
     - cron: '30 8 * * *'  # 8:30am UTC daily (9:30am BST)
-  workflow_dispatch:       # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -26,8 +26,10 @@ jobs:
 
       - name: Run iCloud sync
         env:
-          ICLOUD_EMAIL:     ${{ secrets.ICLOUD_EMAIL }}
-          ICLOUD_PASS:      ${{ secrets.ICLOUD_PASS }}
-          CLAUDE_API_KEY:   ${{ secrets.CLAUDE_API_KEY }}
+          ICLOUD_EMAIL:       ${{ secrets.ICLOUD_EMAIL }}
+          ICLOUD_PASS:        ${{ secrets.ICLOUD_PASS }}
+          CLAUDE_API_KEY:     ${{ secrets.CLAUDE_API_KEY }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          SHEET_ID:           ${{ secrets.SHEET_ID }}
+          APPS_SCRIPT_URL:    ${{ secrets.APPS_SCRIPT_URL }}
         run: python icloud_sync.py
