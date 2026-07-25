@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.15</span>
+    <span class="version-pill">v2.16</span>
   </div>
 </div>
 
@@ -1199,9 +1199,37 @@
     <div class="page-header">
       <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
       <div class="header-right">
-        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
+        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:200px;">
+        <button class="btn" id="invSnapshotBtn" title="Take a named inventory snapshot">📷 Snapshot</button>
         <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
       </div>
+    </div>
+
+    <!-- Inventory check / snapshot bar -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:600;color:var(--text-muted);">INVENTORY CHECK</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--text-muted);">As of date:</label>
+        <input type="date" id="invCheckDate" style="font-size:12px;padding:4px 8px;max-width:140px;">
+        <button class="btn" id="invCheckApplyBtn" style="font-size:12px;padding:4px 12px;">Apply</button>
+        <button class="btn" id="invCheckClearBtn" style="font-size:12px;padding:4px 12px;display:none;">✕ Clear</button>
+      </div>
+      <div style="height:20px;width:1px;background:var(--border);"></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--text-muted);">Saved snapshots:</label>
+        <select id="invSnapshotSelect" style="font-size:12px;padding:4px 8px;max-width:180px;">
+          <option value="">Select a snapshot...</option>
+        </select>
+        <button class="btn" id="invSnapshotLoadBtn" style="font-size:12px;padding:4px 10px;">Load</button>
+        <button class="btn" id="invSnapshotExportBtn" style="font-size:12px;padding:4px 10px;">↓ CSV</button>
+        <button class="btn btn-danger-ghost" id="invSnapshotDeleteBtn" style="font-size:12px;padding:4px 10px;">Delete</button>
+      </div>
+    </div>
+
+    <!-- Active snapshot banner -->
+    <div id="invSnapshotBanner" style="display:none;background:var(--indigo-dim);border:1px solid var(--indigo);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+      <span id="invSnapshotBannerText" style="font-size:13px;color:var(--indigo);font-weight:600;"></span>
+      <button class="btn" id="invSnapshotExitBtn" style="font-size:12px;padding:4px 10px;">Exit snapshot view</button>
     </div>
 
     <div class="tabs">
@@ -1210,7 +1238,6 @@
     </div>
 
     <div class="inv-subtab-content active" data-inv-subtab="stock">
-
       <div class="stat-row" id="invSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
 
       <div class="seg" id="invStatusFilter" style="margin-bottom:16px; width:fit-content;">
@@ -5315,12 +5342,64 @@
   var _invPage = 1;
   var _invPageSize = 25;
 
+  function renderInventoryFromRows(rows) {
+    var wrap = document.getElementById('invTableWrap');
+    if(!wrap) return;
+
+    var totalValue = rows.reduce(function(s,r){ return s+(r.qty||0)*(r.price||0); }, 0);
+    document.getElementById('invCountSub').textContent = rows.length + ' item' + (rows.length===1?'':'s') + ' · ' + fmtMoney(totalValue) + ' total value';
+    document.getElementById('invSummaryRow').innerHTML =
+      '<div class="stat-card" style="border-top:2px solid var(--indigo);background:linear-gradient(135deg,#6d6df00d,transparent 60%);"><div class="label">Items</div><div class="value" style="color:var(--indigo);">'+rows.length+'</div></div>' +
+      '<div class="stat-card" style="border-top:2px solid var(--green);background:linear-gradient(135deg,#2dd4a00d,transparent 60%);"><div class="label">Total qty</div><div class="value" style="color:var(--green);">'+rows.reduce(function(s,r){return s+(r.qty||0);},0)+'</div></div>' +
+      '<div class="stat-card" style="border-top:2px solid var(--amber);background:linear-gradient(135deg,#f0b35c0d,transparent 60%);"><div class="label">Stock value</div><div class="value" style="color:var(--amber);">'+fmtMoney(totalValue)+'</div></div>';
+
+    if(!rows.length){
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">No inventory found for this date.</div>';
+      return;
+    }
+
+    wrap.innerHTML = '<table style="table-layout:fixed;width:100%;"><thead><tr>' +
+      '<th style="width:70px;">ID</th><th>Title</th><th style="width:80px;" class="right">Qty</th>' +
+      '<th style="width:100px;" class="right">Buy Price</th><th style="width:110px;" class="right">Total Value</th>' +
+      '<th style="width:120px;">Status</th><th style="width:120px;">Retailer</th><th style="width:110px;">Date Bought</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(function(r){
+      var itemId = getItemId(r.item);
+      var value  = (r.qty||0)*(r.price||0);
+      return '<tr>' +
+        '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
+        '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span></td>' +
+        '<td class="right" style="font-weight:600;">'+r.qty+'</td>' +
+        '<td class="right">'+fmtMoney(r.price)+'</td>' +
+        '<td class="right" style="font-weight:600;color:var(--green);">'+fmtMoney(value)+'</td>' +
+        '<td><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-secondary);">'+escapeHtml(r.status||'—')+'</span></td>' +
+        '<td style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(r.site||'—')+'</td>' +
+        '<td style="font-size:12px;color:var(--text-muted);">'+fmtDateUK(r.date)+'</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--border);">'+
+      '<span style="font-size:12px;color:var(--text-muted);">'+rows.length+' items</span>'+
+      '<span style="font-size:13px;font-weight:700;">Total value: <span style="color:var(--green);">'+fmtMoney(totalValue)+'</span></span>'+
+    '</div>';
+  }
+
   function renderInventoryPage(){
     var invTab = document.getElementById('page-inventory');
     if(!invTab) return;
 
     var search = (document.getElementById('invSearch').value || '').toLowerCase();
     var statusFilter = invStatusFilter;
+
+    // Point-in-time view — snapshot or as-of-date filter
+    if(_invCheckDate) {
+      var ptSource = _activeSnapshot ? _activeSnapshot.rows : buildInventorySnapshot(_invCheckDate);
+      var ptRows = ptSource.filter(function(r){
+        return !search || r.item.toLowerCase().indexOf(search) !== -1 || (r.site||'').toLowerCase().indexOf(search) !== -1;
+      });
+      renderInventoryFromRows(ptRows);
+      return;
+    }
+
     var byItem = {};
     entries.forEach(function(e){
       if(e.type === 'sale' && /^TKT-\d+$/.test(e.matchedItem||'')) return;
@@ -5515,7 +5594,154 @@
     });
   }
 
-    document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
+    // ============================================================
+  // INVENTORY SNAPSHOTS
+  // Named point-in-time snapshots of inventory state.
+  // Stored in localStorage under 'inventory:snapshots'.
+  // ============================================================
+  var INV_SNAPSHOTS_KEY = 'inventory:snapshots';
+  var _invCheckDate  = null;  // date filter for "as of" view
+  var _activeSnapshot = null; // currently loaded snapshot name
+
+  function loadSnapshots() {
+    try { return JSON.parse(localStorage.getItem(INV_SNAPSHOTS_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function saveSnapshots(snaps) {
+    localStorage.setItem(INV_SNAPSHOTS_KEY, JSON.stringify(snaps));
+  }
+
+  function buildInventorySnapshot(asOfDate) {
+    // Returns inventory state as of a given date
+    var asOf = asOfDate || todayISO();
+    var byItem = {};
+    entries.forEach(function(e){
+      if(e.type === 'purchase'){
+        var entryDate = (e.purchasedOn||e.date||'').slice(0,10);
+        if(entryDate > asOf) return; // exclude future entries
+        var key = e.item;
+        if(!byItem[key]) byItem[key] = { item: key, qty: 0, price: 0, site: '', status: '', date: '', orderNumber: '' };
+        byItem[key].qty   += e.qty || 1;
+        byItem[key].price  = e.price || 0;
+        byItem[key].site   = e.site || '';
+        byItem[key].status = effectiveStatus(e);
+        byItem[key].date   = entryDate;
+        byItem[key].orderNumber = e.orderNumber || '';
+      }
+      if(e.type === 'sale'){
+        var saleDate = (e.date||'').slice(0,10);
+        if(saleDate > asOf) return; // exclude future sales
+        var key2 = e.matchedItem || e.item;
+        if(byItem[key2]) byItem[key2].qty -= (e.qty || 1);
+      }
+    });
+    return Object.values(byItem).filter(function(r){ return r.qty > 0; });
+  }
+
+  function populateSnapshotSelect() {
+    var sel = document.getElementById('invSnapshotSelect');
+    if(!sel) return;
+    var snaps = loadSnapshots();
+    sel.innerHTML = '<option value="">Select a snapshot...</option>' +
+      snaps.map(function(s){
+        return '<option value="'+escapeAttr(s.name)+'">'+escapeHtml(s.name)+' — '+escapeHtml(s.date)+'</option>';
+      }).join('');
+  }
+
+  function exportSnapshotCSV(rows, name) {
+    var csv = ['Item,Qty,Buy Price,Total Value,Status,Retailer,Date Bought,Order #'];
+    rows.forEach(function(r){
+      csv.push([r.item, r.qty, r.price, (r.qty*r.price).toFixed(2), r.status, r.site, r.date, r.orderNumber]
+        .map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(','));
+    });
+    var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'inventory-snapshot-' + (name||todayISO()).replace(/[^a-z0-9]/gi,'-') + '.csv';
+    a.click();
+  }
+
+  // Wire snapshot controls
+  document.getElementById('invSnapshotBtn').addEventListener('click', function(){
+    var name = prompt('Name this snapshot (e.g. "Pre-Christmas 2026"):');
+    if(!name || !name.trim()) return;
+    var asOf = document.getElementById('invCheckDate').value || todayISO();
+    var rows = buildInventorySnapshot(asOf);
+    var snap = { name: name.trim(), date: asOf, createdAt: new Date().toISOString(), rows: rows };
+    var snaps = loadSnapshots();
+    // Replace if same name
+    var idx = snaps.findIndex(function(s){ return s.name === snap.name; });
+    if(idx !== -1) snaps[idx] = snap; else snaps.unshift(snap);
+    saveSnapshots(snaps);
+    populateSnapshotSelect();
+    showToast('Snapshot "'+snap.name+'" saved ('+rows.length+' items)');
+  });
+
+  document.getElementById('invCheckApplyBtn').addEventListener('click', function(){
+    var d = document.getElementById('invCheckDate').value;
+    if(!d){ showToast('Please select a date first', true); return; }
+    _invCheckDate = d;
+    document.getElementById('invCheckClearBtn').style.display = '';
+    var banner = document.getElementById('invSnapshotBanner');
+    document.getElementById('invSnapshotBannerText').textContent = '📅 Showing inventory as of '+fmtDateUK(d);
+    banner.style.display = 'flex';
+    renderInventoryPage();
+  });
+
+  document.getElementById('invCheckClearBtn').addEventListener('click', function(){
+    _invCheckDate = null;
+    _activeSnapshot = null;
+    this.style.display = 'none';
+    document.getElementById('invCheckDate').value = '';
+    document.getElementById('invSnapshotBanner').style.display = 'none';
+    renderInventoryPage();
+  });
+
+  document.getElementById('invSnapshotLoadBtn').addEventListener('click', function(){
+    var name = document.getElementById('invSnapshotSelect').value;
+    if(!name){ showToast('Select a snapshot first', true); return; }
+    var snap = loadSnapshots().find(function(s){ return s.name === name; });
+    if(!snap) return;
+    _activeSnapshot = snap;
+    _invCheckDate = snap.date;
+    document.getElementById('invCheckDate').value = snap.date;
+    document.getElementById('invCheckClearBtn').style.display = '';
+    var banner = document.getElementById('invSnapshotBanner');
+    document.getElementById('invSnapshotBannerText').textContent = '📷 Snapshot: "'+snap.name+'" — '+fmtDateUK(snap.date)+' ('+snap.rows.length+' items)';
+    banner.style.display = 'flex';
+    renderInventoryPage();
+  });
+
+  document.getElementById('invSnapshotExportBtn').addEventListener('click', function(){
+    var name = document.getElementById('invSnapshotSelect').value;
+    var snaps = loadSnapshots();
+    var snap = snaps.find(function(s){ return s.name === name; });
+    var rows = snap ? snap.rows : buildInventorySnapshot(_invCheckDate || todayISO());
+    exportSnapshotCSV(rows, name || 'current');
+  });
+
+  document.getElementById('invSnapshotDeleteBtn').addEventListener('click', function(){
+    var name = document.getElementById('invSnapshotSelect').value;
+    if(!name){ showToast('Select a snapshot to delete', true); return; }
+    if(!confirm('Delete snapshot "'+name+'"?')) return;
+    var snaps = loadSnapshots().filter(function(s){ return s.name !== name; });
+    saveSnapshots(snaps);
+    populateSnapshotSelect();
+    showToast('Snapshot deleted');
+  });
+
+  document.getElementById('invSnapshotExitBtn') && document.getElementById('invSnapshotExitBtn').addEventListener('click', function(){
+    _invCheckDate = null;
+    _activeSnapshot = null;
+    document.getElementById('invCheckDate').value = '';
+    document.getElementById('invCheckClearBtn').style.display = 'none';
+    document.getElementById('invSnapshotBanner').style.display = 'none';
+    renderInventoryPage();
+  });
+
+  // Populate snapshot select on load
+  populateSnapshotSelect();
+
+  document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
   document.querySelectorAll('#page-inventory .tab[data-inv-subtab]').forEach(function(tab){
     tab.addEventListener('click', function(){
