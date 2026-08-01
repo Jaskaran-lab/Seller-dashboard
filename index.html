@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.14</span>
+    <span class="version-pill">v0.15</span>
   </div>
 </div>
 
@@ -3640,6 +3640,22 @@
 
     // Initial render
     renderBSContent('units');
+
+    // Fetch product image in background
+    (async function(){
+      try {
+        var res = await fetch(BACKUP_SCRIPT_URL + '?action=ebayimage&q=' + encodeURIComponent(byUnits[0].label.slice(0,60)), { redirect: 'follow' });
+        var data = await res.json();
+        if(data.imageUrl){
+          var avatar = document.getElementById('bsItemAvatar');
+          if(avatar){
+            avatar.style.padding = '0';
+            avatar.style.overflow = 'hidden';
+            avatar.innerHTML = '<img src="'+escapeAttr(data.imageUrl)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.parentElement.style.padding=\'8px\';this.remove();">';
+          }
+        }
+      } catch(e) {}
+    })();
 
     // Wire tabs
     el.querySelectorAll('.bs-tab').forEach(function(btn){
