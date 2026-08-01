@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.11</span>
+    <span class="version-pill">v0.12</span>
   </div>
 </div>
 
@@ -3546,22 +3546,111 @@
       return;
     }
     var top = sorted[0][1];
-    // Generate a consistent colour from the item name
     var colours = ['#6d6df0','#2dd4a0','#b78cf2','#f0b35c','#f06d6d','#378ADD'];
-    var colIdx = top.label.split('').reduce(function(s,c){ return s+c.charCodeAt(0); }, 0) % colours.length;
+    var colIdx = top.label.split('').reduce(function(s,c){ return s+c.charCodeAt(0); },0) % colours.length;
     var avatarCol = colours[colIdx];
-    var initials = top.label.split(' ').slice(0,2).map(function(w){ return w[0]||''; }).join('').toUpperCase();
+
+    // Runner up
+    var runnerUp = sorted[1] ? sorted[1][1] : null;
+
+    // All-time best seller
+    var allByItem = {};
+    entries.filter(function(e){ return e.type==='sale'; }).forEach(function(e){
+      var key = e.matchedItem || e.item;
+      if(!allByItem[key]) allByItem[key] = { label: e.item, qty: 0, revenue: 0 };
+      allByItem[key].qty += e.qty;
+      allByItem[key].revenue += saleRevenue(e);
+    });
+    var allTimeBest = Object.values(allByItem).sort(function(a,b){ return b.qty-a.qty; })[0];
+
+    // Latest sale date
+    var latestSale = entries.filter(function(e){ return e.type==='sale' && e.date; })
+      .sort(function(a,b){ return b.date.localeCompare(a.date); })[0];
+
+    // Category from linked purchase
+    var linkedPurchase = entries.find(function(e){ return e.type==='purchase' && e.item===top.label; });
+    var category = linkedPurchase && linkedPurchase.category ? linkedPurchase.category : (linkedPurchase && linkedPurchase.site ? linkedPurchase.site : '');
+
+    // Profit for best seller
+    var topProfit = 0;
+    entries.filter(function(e){ return e.type==='sale' && (e.matchedItem===top.label||e.item===top.label); }).forEach(function(e){
+      var match = resolveMatchedEntry(e.matchedItem);
+      var cost = match ? (match.price||0)*(e.qty||1) : 0;
+      topProfit += saleRevenue(e) - cost;
+    });
 
     el.innerHTML =
-      '<span class="badge" style="background:var(--green-dim); color:var(--green); margin-bottom:14px; display:inline-flex;">★ Best seller<span style="color:var(--text-muted); margin-left:6px; font-weight:400;">This month</span></span>' +
-      '<div style="display:flex;gap:16px;align-items:center;margin-top:6px;">' +
-        '<div style="width:72px;height:72px;border-radius:14px;background:'+avatarCol+'22;border:2px solid '+avatarCol+'44;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:'+avatarCol+';">'+escapeHtml(initials)+'</div>' +
-        '<div>' +
-          '<div style="font-size:15px;font-weight:600;line-height:1.3;">'+escapeHtml(top.label)+'</div>' +
-          '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">'+top.qty+' unit'+(top.qty===1?'':'s')+' sold this period</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">'+fmtMoney(top.revenue)+' revenue</div>' +
+      // Header row
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<span style="background:var(--amber);color:#000;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;">🏅 BEST SELLER</span>' +
+          '<span style="font-size:12px;color:var(--text-muted);">This month</span>' +
         '</div>' +
+        '<div id="bsMetricTabs" style="display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:8px;">' +
+          '<button class="bs-tab active" data-bs="units" style="padding:4px 10px;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">UNITS</button>' +
+          '<button class="bs-tab" data-bs="profit" style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">PROFIT</button>' +
+          '<button class="bs-tab" data-bs="revenue" style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">REVENUE</button>' +
+        '</div>' +
+      '</div>' +
+
+      // Item display
+      '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;">' +
+        '<div style="width:80px;height:80px;border-radius:12px;background:'+avatarCol+'22;border:1.5px solid '+avatarCol+'44;flex-shrink:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;">' +
+          '<span style="font-size:11px;font-weight:700;color:'+avatarCol+';line-height:1.3;">'+escapeHtml(top.label.split(' ').slice(0,4).join(' '))+'</span>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-bottom:6px;">'+escapeHtml(top.label.length>30?top.label.slice(0,30)+'…':top.label)+'</div>' +
+          (category?'<span style="font-size:11px;font-weight:600;padding:2px 10px;border-radius:99px;background:var(--surface-2);color:var(--text-secondary);">'+escapeHtml(category)+'</span>':'') +
+        '</div>' +
+      '</div>' +
+
+      // Stat cards
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Sold</div>' +
+          '<div style="font-size:20px;font-weight:700;">'+top.qty+'</div>' +
+        '</div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Revenue</div>' +
+          '<div style="font-size:20px;font-weight:700;">'+fmtMoney(top.revenue)+'</div>' +
+        '</div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Profit</div>' +
+          '<div style="font-size:20px;font-weight:700;color:'+(topProfit>=0?'var(--green)':'var(--red)')+';">'+fmtMoneySigned(topProfit)+'</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Runner up + all-time best
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Runner Up</div>' +
+          '<div style="font-size:13px;font-weight:500;color:var(--text-secondary);">'+(runnerUp?escapeHtml(runnerUp.label.length>25?runnerUp.label.slice(0,25)+'…':runnerUp.label):'No runner up yet')+'</div>' +
+        '</div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
+          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">All-Time Best</div>' +
+          '<div style="font-size:13px;font-weight:500;color:var(--text-secondary);">'+(allTimeBest?escapeHtml(allTimeBest.label.length>25?allTimeBest.label.slice(0,25)+'…':allTimeBest.label):'—')+'</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Footer
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<span style="font-size:12px;color:var(--text-muted);">Latest sale: <strong style="color:var(--text-secondary);">'+(latestSale?fmtDateUK(latestSale.date):'—')+'</strong></span>' +
+        '<span style="font-size:12px;color:var(--indigo);cursor:pointer;" data-go-tab="analytics">See all analytics →</span>' +
       '</div>';
+
+    // Wire metric tabs
+    el.querySelectorAll('.bs-tab').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        el.querySelectorAll('.bs-tab').forEach(function(t){
+          t.style.background = 'transparent'; t.style.color = 'var(--text-muted)'; t.style.fontWeight = '400';
+        });
+        this.style.background = 'var(--indigo)'; this.style.color = '#fff'; this.style.fontWeight = '700';
+      });
+    });
+
+    // Wire see all analytics
+    var seeAll = el.querySelector('[data-go-tab="analytics"]');
+    if(seeAll) seeAll.addEventListener('click', function(){ document.querySelector('.nav-item[data-page="analytics"]').click(); });
   }
 
   function renderOverviewRevenueProfitChart(){
