@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v2.20</span>
+    <span class="version-pill">v2.21</span>
   </div>
 </div>
 
@@ -7783,7 +7783,18 @@
     await loadPresets();
     setLoadingStatus('Syncing new orders…', 75);
     var newFromSheet = await syncFromSheet();
-    if(newFromSheet > 0){ await loadEntries(); } // reload if new entries arrived
+    if(newFromSheet > 0){ await loadEntries(); }
+
+    // Silently trigger eBay scan in background and pull new sales
+    setLoadingStatus('Checking eBay sales…', 80);
+    try {
+      var ebayRes = await fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' });
+      var ebayData = await ebayRes.json();
+      if(ebayData && ebayData.count > 0){
+        var added = await syncFromSheet();
+        if(added > 0){ await loadEntries(); }
+      }
+    } catch(e) { console.warn('eBay startup sync skipped:', e.message); } // reload if new entries arrived
     setLoadingStatus('Rendering dashboard…', 90);
     applyPrefs();
     initSettingsPage();
