@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.7</span>
+    <span class="version-pill">v0.8</span>
   </div>
 </div>
 
@@ -7783,22 +7783,7 @@
     await loadPresets();
     setLoadingStatus('Syncing new orders…', 75);
     var newFromSheet = await syncFromSheet();
-    if(newFromSheet > 0){ await loadEntries(); }
-
-    // Trigger eBay scan then pull any new entries from KV store
-    setLoadingStatus('Checking eBay sales…', 80);
-    try {
-      // Trigger the scan (runs async server-side)
-      fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' }).catch(function(){});
-      // Wait for scan to run then pull results
-      await new Promise(function(r){ setTimeout(r, 8000); });
-      var added = await syncFromSheet();
-      if(added > 0){
-        await loadEntries();
-        renderAll();
-        showToast(added + ' new sale' + (added===1?'':'s') + ' synced from eBay ✓');
-      }
-    } catch(e) { console.warn('eBay startup sync skipped:', e.message); } // reload if new entries arrived
+    if(newFromSheet > 0){ await loadEntries(); } // reload if new entries arrived
     setLoadingStatus('Rendering dashboard…', 90);
     applyPrefs();
     initSettingsPage();
@@ -7861,6 +7846,20 @@
         setTimeout(function(){ overlay.remove(); }, 400);
       }
     }, 300);
+
+    // Background eBay sync — runs after dashboard is visible, non-blocking
+    setTimeout(async function(){
+      try {
+        fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' }).catch(function(){});
+        await new Promise(function(r){ setTimeout(r, 10000); });
+        var added = await syncFromSheet();
+        if(added > 0){
+          await loadEntries();
+          renderAll();
+          showToast(added + ' new eBay sale' + (added===1?'':'s') + ' synced ✓');
+        }
+      } catch(e) { console.warn('Background eBay sync skipped:', e.message); }
+    }, 2000);
   })().catch(function(err){
     console.error('Init error:', err);
     var overlay = document.getElementById('loadingOverlay');
