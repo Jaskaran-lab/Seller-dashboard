@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.6</span>
+    <span class="version-pill">v0.7</span>
   </div>
 </div>
 
@@ -7785,14 +7785,18 @@
     var newFromSheet = await syncFromSheet();
     if(newFromSheet > 0){ await loadEntries(); }
 
-    // Silently trigger eBay scan in background and pull new sales
+    // Trigger eBay scan then pull any new entries from KV store
     setLoadingStatus('Checking eBay sales…', 80);
     try {
-      var ebayRes = await fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' });
-      var ebayData = await ebayRes.json();
-      if(ebayData && ebayData.count > 0){
-        var added = await syncFromSheet();
-        if(added > 0){ await loadEntries(); }
+      // Trigger the scan (runs async server-side)
+      fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' }).catch(function(){});
+      // Wait for scan to run then pull results
+      await new Promise(function(r){ setTimeout(r, 8000); });
+      var added = await syncFromSheet();
+      if(added > 0){
+        await loadEntries();
+        renderAll();
+        showToast(added + ' new sale' + (added===1?'':'s') + ' synced from eBay ✓');
       }
     } catch(e) { console.warn('eBay startup sync skipped:', e.message); } // reload if new entries arrived
     setLoadingStatus('Rendering dashboard…', 90);
