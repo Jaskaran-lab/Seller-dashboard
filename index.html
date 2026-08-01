@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.13</span>
+    <span class="version-pill">v0.14</span>
   </div>
 </div>
 
@@ -3599,8 +3599,8 @@
       document.getElementById('bsItemCategory').style.display = category ? '' : 'none';
 
       document.getElementById('bsSold').textContent    = top.qty;
-      document.getElementById('bsRevenue').textContent = fmtMoney(top.revenue);
-      document.getElementById('bsProfit').textContent  = fmtMoneySigned(top.profit);
+      document.getElementById('bsRevenue').innerHTML   = fmtMoney(top.revenue);
+      document.getElementById('bsProfit').innerHTML    = fmtMoneySigned(top.profit);
       document.getElementById('bsProfit').style.color  = top.profit>=0?'var(--green)':'var(--red)';
       document.getElementById('bsRunnerUp').textContent = runnerUp ? (runnerUp.label.length>25?runnerUp.label.slice(0,25)+'…':runnerUp.label) : 'No runner up yet';
     }
