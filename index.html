@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.12</span>
+    <span class="version-pill">v0.13</span>
   </div>
 </div>
 
@@ -3531,35 +3531,37 @@
       var linked = resolveMatchedEntry(e.matchedItem);
       if(linked) byItem[key].label = linked.type === 'ticket' && linked.venue ? (linked.item + ' — ' + linked.venue) : linked.item;
     });
-    var sorted = Object.entries(byItem).sort(function(a,b){ return b[1].qty-a[1].qty; });
-
     var el = document.getElementById('bestSellerContent');
-    if(!sorted.length){
-      el.innerHTML =
-        '<div style="display:flex; gap:16px; align-items:center; height:100%;">' +
-          '<div style="width:90px; height:90px; border:1px solid var(--border-strong); border-radius:12px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:11px; color:var(--text-muted); padding:8px; flex-shrink:0;">No sales in this period yet</div>' +
-          '<div>' +
-            '<span class="badge" style="background:var(--green-dim); color:var(--green);">★ Best seller<span style="color:var(--text-muted); margin-left:6px; font-weight:400;">This month</span></span>' +
-            '<p style="font-size:13px; color:var(--text-secondary); margin-top:10px; line-height:1.5;">When you record sales for this period, your top product by units sold will appear here.</p>' +
-          '</div>' +
-        '</div>';
+    if(!Object.keys(byItem).length){
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">No sales this period yet.</div>';
       return;
     }
-    var top = sorted[0][1];
-    var colours = ['#6d6df0','#2dd4a0','#b78cf2','#f0b35c','#f06d6d','#378ADD'];
-    var colIdx = top.label.split('').reduce(function(s,c){ return s+c.charCodeAt(0); },0) % colours.length;
-    var avatarCol = colours[colIdx];
+    // Build rankings for all three metrics
+    var byItem = {};
+    entries.filter(function(e){ return e.type==='sale'; }).forEach(function(e){
+      if(!cutoff || new Date(e.date) >= cutoff){
+        var key = e.matchedItem || e.item;
+        if(!byItem[key]) byItem[key] = { label: e.item, qty: 0, revenue: 0, profit: 0 };
+        byItem[key].qty     += e.qty;
+        byItem[key].revenue += saleRevenue(e);
+        var match = resolveMatchedEntry(e.matchedItem);
+        var cost = match ? (match.price||0)*(e.qty||1) : 0;
+        byItem[key].profit  += saleRevenue(e) - cost;
+      }
+    });
 
-    // Runner up
-    var runnerUp = sorted[1] ? sorted[1][1] : null;
+    var byUnits   = Object.values(byItem).sort(function(a,b){ return b.qty-a.qty; });
+    var byRevenue = Object.values(byItem).sort(function(a,b){ return b.revenue-a.revenue; });
+    var byProfit  = Object.values(byItem).sort(function(a,b){ return b.profit-a.profit; });
 
-    // All-time best seller
+    if(!byUnits.length){ el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">No sales this period yet.</div>'; return; }
+
+    // All-time best seller (by units, all time)
     var allByItem = {};
     entries.filter(function(e){ return e.type==='sale'; }).forEach(function(e){
       var key = e.matchedItem || e.item;
-      if(!allByItem[key]) allByItem[key] = { label: e.item, qty: 0, revenue: 0 };
+      if(!allByItem[key]) allByItem[key] = { label: e.item, qty: 0 };
       allByItem[key].qty += e.qty;
-      allByItem[key].revenue += saleRevenue(e);
     });
     var allTimeBest = Object.values(allByItem).sort(function(a,b){ return b.qty-a.qty; })[0];
 
@@ -3567,89 +3569,90 @@
     var latestSale = entries.filter(function(e){ return e.type==='sale' && e.date; })
       .sort(function(a,b){ return b.date.localeCompare(a.date); })[0];
 
-    // Category from linked purchase
-    var linkedPurchase = entries.find(function(e){ return e.type==='purchase' && e.item===top.label; });
-    var category = linkedPurchase && linkedPurchase.category ? linkedPurchase.category : (linkedPurchase && linkedPurchase.site ? linkedPurchase.site : '');
+    var colours = ['#6d6df0','#2dd4a0','#b78cf2','#f0b35c','#f06d6d','#378ADD'];
 
-    // Profit for best seller
-    var topProfit = 0;
-    entries.filter(function(e){ return e.type==='sale' && (e.matchedItem===top.label||e.item===top.label); }).forEach(function(e){
-      var match = resolveMatchedEntry(e.matchedItem);
-      var cost = match ? (match.price||0)*(e.qty||1) : 0;
-      topProfit += saleRevenue(e) - cost;
-    });
+    function renderBSContent(metric) {
+      var ranked = metric==='revenue' ? byRevenue : metric==='profit' ? byProfit : byUnits;
+      var top = ranked[0];
+      var runnerUp = ranked[1] || null;
+      var colIdx = top.label.split('').reduce(function(s,c){ return s+c.charCodeAt(0); },0) % colours.length;
+      var avatarCol = colours[colIdx];
+
+      var linkedPurchase = entries.find(function(e){ return e.type==='purchase' && e.item===top.label; });
+      var category = linkedPurchase && linkedPurchase.category ? linkedPurchase.category : (linkedPurchase && linkedPurchase.site ? linkedPurchase.site : '');
+
+      var metricValue, metricLabel;
+      if(metric==='revenue'){
+        metricValue = fmtMoney(top.revenue); metricLabel = 'Revenue';
+      } else if(metric==='profit'){
+        metricValue = fmtMoneySigned(top.profit); metricLabel = 'Profit';
+      } else {
+        metricValue = top.qty + ' unit' + (top.qty===1?'':'s'); metricLabel = 'Sold';
+      }
+
+      document.getElementById('bsItemAvatar').style.background = avatarCol+'22';
+      document.getElementById('bsItemAvatar').style.borderColor = avatarCol+'44';
+      document.getElementById('bsItemAvatar').style.color = avatarCol;
+      document.getElementById('bsItemAvatar').textContent = top.label.split(' ').slice(0,4).join(' ');
+      document.getElementById('bsItemName').textContent = top.label.length>30 ? top.label.slice(0,30)+'…' : top.label;
+      document.getElementById('bsItemCategory').textContent = category;
+      document.getElementById('bsItemCategory').style.display = category ? '' : 'none';
+
+      document.getElementById('bsSold').textContent    = top.qty;
+      document.getElementById('bsRevenue').textContent = fmtMoney(top.revenue);
+      document.getElementById('bsProfit').textContent  = fmtMoneySigned(top.profit);
+      document.getElementById('bsProfit').style.color  = top.profit>=0?'var(--green)':'var(--red)';
+      document.getElementById('bsRunnerUp').textContent = runnerUp ? (runnerUp.label.length>25?runnerUp.label.slice(0,25)+'…':runnerUp.label) : 'No runner up yet';
+    }
 
     el.innerHTML =
-      // Header row
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<span style="background:var(--amber);color:#000;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;">🏅 BEST SELLER</span>' +
+          '<span style="background:var(--amber);color:#000;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;">🏅 BEST SELLER</span>' +
           '<span style="font-size:12px;color:var(--text-muted);">This month</span>' +
         '</div>' +
         '<div id="bsMetricTabs" style="display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:8px;">' +
-          '<button class="bs-tab active" data-bs="units" style="padding:4px 10px;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">UNITS</button>' +
-          '<button class="bs-tab" data-bs="profit" style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">PROFIT</button>' +
-          '<button class="bs-tab" data-bs="revenue" style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">REVENUE</button>' +
+          '<button class="bs-tab active" data-bs="units"   style="padding:4px 10px;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">UNITS</button>' +
+          '<button class="bs-tab"        data-bs="profit"  style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">PROFIT</button>' +
+          '<button class="bs-tab"        data-bs="revenue" style="padding:4px 10px;font-size:11px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);">REVENUE</button>' +
         '</div>' +
       '</div>' +
-
-      // Item display
       '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;">' +
-        '<div style="width:80px;height:80px;border-radius:12px;background:'+avatarCol+'22;border:1.5px solid '+avatarCol+'44;flex-shrink:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;">' +
-          '<span style="font-size:11px;font-weight:700;color:'+avatarCol+';line-height:1.3;">'+escapeHtml(top.label.split(' ').slice(0,4).join(' '))+'</span>' +
-        '</div>' +
+        '<div id="bsItemAvatar" style="width:80px;height:80px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:11px;font-weight:700;line-height:1.3;border:1.5px solid;"></div>' +
         '<div>' +
-          '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-bottom:6px;">'+escapeHtml(top.label.length>30?top.label.slice(0,30)+'…':top.label)+'</div>' +
-          (category?'<span style="font-size:11px;font-weight:600;padding:2px 10px;border-radius:99px;background:var(--surface-2);color:var(--text-secondary);">'+escapeHtml(category)+'</span>':'') +
+          '<div id="bsItemName" style="font-size:20px;font-weight:700;line-height:1.2;margin-bottom:6px;"></div>' +
+          '<span id="bsItemCategory" style="font-size:11px;font-weight:600;padding:2px 10px;border-radius:99px;background:var(--surface-2);color:var(--text-secondary);display:none;"></span>' +
         '</div>' +
       '</div>' +
-
-      // Stat cards
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">' +
-        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Sold</div>' +
-          '<div style="font-size:20px;font-weight:700;">'+top.qty+'</div>' +
-        '</div>' +
-        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Revenue</div>' +
-          '<div style="font-size:20px;font-weight:700;">'+fmtMoney(top.revenue)+'</div>' +
-        '</div>' +
-        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Profit</div>' +
-          '<div style="font-size:20px;font-weight:700;color:'+(topProfit>=0?'var(--green)':'var(--red)')+';">'+fmtMoneySigned(topProfit)+'</div>' +
-        '</div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Sold</div><div id="bsSold" style="font-size:20px;font-weight:700;"></div></div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Revenue</div><div id="bsRevenue" style="font-size:20px;font-weight:700;"></div></div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Profit</div><div id="bsProfit" style="font-size:20px;font-weight:700;"></div></div>' +
       '</div>' +
-
-      // Runner up + all-time best
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">' +
-        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Runner Up</div>' +
-          '<div style="font-size:13px;font-weight:500;color:var(--text-secondary);">'+(runnerUp?escapeHtml(runnerUp.label.length>25?runnerUp.label.slice(0,25)+'…':runnerUp.label):'No runner up yet')+'</div>' +
-        '</div>' +
-        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">All-Time Best</div>' +
-          '<div style="font-size:13px;font-weight:500;color:var(--text-secondary);">'+(allTimeBest?escapeHtml(allTimeBest.label.length>25?allTimeBest.label.slice(0,25)+'…':allTimeBest.label):'—')+'</div>' +
-        '</div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Runner Up</div><div id="bsRunnerUp" style="font-size:13px;font-weight:500;color:var(--text-secondary);"></div></div>' +
+        '<div style="background:var(--surface-2);border-radius:10px;padding:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">All-Time Best</div><div style="font-size:13px;font-weight:500;color:var(--text-secondary);">'+(allTimeBest?escapeHtml(allTimeBest.label.length>25?allTimeBest.label.slice(0,25)+'…':allTimeBest.label):'—')+'</div></div>' +
       '</div>' +
-
-      // Footer
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-size:12px;color:var(--text-muted);">Latest sale: <strong style="color:var(--text-secondary);">'+(latestSale?fmtDateUK(latestSale.date):'—')+'</strong></span>' +
-        '<span style="font-size:12px;color:var(--indigo);cursor:pointer;" data-go-tab="analytics">See all analytics →</span>' +
+        '<span style="font-size:12px;color:var(--indigo);cursor:pointer;" id="bsSeeAnalytics">See all analytics →</span>' +
       '</div>';
 
-    // Wire metric tabs
+    // Initial render
+    renderBSContent('units');
+
+    // Wire tabs
     el.querySelectorAll('.bs-tab').forEach(function(btn){
       btn.addEventListener('click', function(){
         el.querySelectorAll('.bs-tab').forEach(function(t){
-          t.style.background = 'transparent'; t.style.color = 'var(--text-muted)'; t.style.fontWeight = '400';
+          t.style.background='transparent'; t.style.color='var(--text-muted)'; t.style.fontWeight='400';
         });
-        this.style.background = 'var(--indigo)'; this.style.color = '#fff'; this.style.fontWeight = '700';
+        this.style.background='var(--indigo)'; this.style.color='#fff'; this.style.fontWeight='700';
+        renderBSContent(this.getAttribute('data-bs'));
       });
     });
 
-    // Wire see all analytics
-    var seeAll = el.querySelector('[data-go-tab="analytics"]');
+    var seeAll = document.getElementById('bsSeeAnalytics');
     if(seeAll) seeAll.addEventListener('click', function(){ document.querySelector('.nav-item[data-page="analytics"]').click(); });
   }
 
