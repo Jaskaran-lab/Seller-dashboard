@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.15</span>
+    <span class="version-pill">v0.16</span>
   </div>
 </div>
 
@@ -3641,12 +3641,12 @@
     // Initial render
     renderBSContent('units');
 
-    // Fetch product image in background
+    // Fetch product image via SerpAPI (Google Images) through Apps Script proxy
     (async function(){
       try {
         var res = await fetch(BACKUP_SCRIPT_URL + '?action=ebayimage&q=' + encodeURIComponent(byUnits[0].label.slice(0,60)), { redirect: 'follow' });
         var data = await res.json();
-        if(data.imageUrl){
+        if(data && data.imageUrl){
           var avatar = document.getElementById('bsItemAvatar');
           if(avatar){
             avatar.style.padding = '0';
