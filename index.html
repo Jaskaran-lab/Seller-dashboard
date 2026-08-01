@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.16</span>
+    <span class="version-pill">v0.17</span>
   </div>
 </div>
 
@@ -7897,14 +7897,8 @@
     await loadPrefs();
     await loadEntries();
     setLoadingStatus('Loading settings…', 60);
-    await loadTemplates();
-    await loadLists();
-    await loadItemIdRegistry();
-    await loadTicketIdRegistry();
-    await loadPresets();
-    setLoadingStatus('Syncing new orders…', 75);
-    var newFromSheet = await syncFromSheet();
-    if(newFromSheet > 0){ await loadEntries(); } // reload if new entries arrived
+    // Load all settings in parallel
+    await Promise.all([loadTemplates(), loadLists(), loadItemIdRegistry(), loadTicketIdRegistry(), loadPresets()]);
     setLoadingStatus('Rendering dashboard…', 90);
     applyPrefs();
     initSettingsPage();
@@ -7968,19 +7962,34 @@
       }
     }, 300);
 
-    // Background eBay sync — runs after dashboard is visible, non-blocking
+    // Background sync — runs silently after dashboard is visible
     setTimeout(async function(){
       try {
+        // Run KV sync and eBay scan trigger in parallel
+        var syncPromise = syncFromSheet();
         fetch(BACKUP_SCRIPT_URL + '?action=scanebay', { redirect: 'follow' }).catch(function(){});
-        await new Promise(function(r){ setTimeout(r, 10000); });
-        var added = await syncFromSheet();
+
+        var added = await syncPromise;
         if(added > 0){
           await loadEntries();
           renderAll();
-          showToast(added + ' new eBay sale' + (added===1?'':'s') + ' synced ✓');
+          showToast(added + ' new order'+(added===1?'':'s')+' synced ✓');
         }
-      } catch(e) { console.warn('Background eBay sync skipped:', e.message); }
-    }, 2000);
+
+        // Pull eBay results after short delay
+        setTimeout(async function(){
+          try {
+            var ebayAdded = await syncFromSheet();
+            if(ebayAdded > 0){
+              await loadEntries();
+              renderAll();
+              showToast(ebayAdded + ' new eBay sale'+(ebayAdded===1?'':'s')+' synced ✓');
+            }
+          } catch(e) {}
+        }, 12000);
+
+      } catch(e) { console.warn('Background sync skipped:', e.message); }
+    }, 1500);
   })().catch(function(err){
     console.error('Init error:', err);
     var overlay = document.getElementById('loadingOverlay');
