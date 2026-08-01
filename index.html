@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.17</span>
+    <span class="version-pill">v0.18</span>
   </div>
 </div>
 
@@ -3641,21 +3641,52 @@
     // Initial render
     renderBSContent('units');
 
-    // Fetch product image via SerpAPI (Google Images) through Apps Script proxy
-    (async function(){
+    // Fetch images for all three best sellers upfront and cache them
+    var _bsImageCache = {};
+
+    async function fetchBSImage(itemName) {
+      if(_bsImageCache[itemName] !== undefined) return _bsImageCache[itemName];
       try {
-        var res = await fetch(BACKUP_SCRIPT_URL + '?action=ebayimage&q=' + encodeURIComponent(byUnits[0].label.slice(0,60)), { redirect: 'follow' });
+        var res = await fetch(BACKUP_SCRIPT_URL + '?action=ebayimage&q=' + encodeURIComponent(itemName.slice(0,60)), { redirect: 'follow' });
         var data = await res.json();
-        if(data && data.imageUrl){
-          var avatar = document.getElementById('bsItemAvatar');
-          if(avatar){
-            avatar.style.padding = '0';
-            avatar.style.overflow = 'hidden';
-            avatar.innerHTML = '<img src="'+escapeAttr(data.imageUrl)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.parentElement.style.padding=\'8px\';this.remove();">';
-          }
-        }
-      } catch(e) {}
-    })();
+        _bsImageCache[itemName] = (data && data.imageUrl) ? data.imageUrl : null;
+      } catch(e) { _bsImageCache[itemName] = null; }
+      return _bsImageCache[itemName];
+    }
+
+    function applyBSImage(itemName) {
+      var imageUrl = _bsImageCache[itemName];
+      var avatar = document.getElementById('bsItemAvatar');
+      if(!avatar) return;
+      if(imageUrl) {
+        avatar.style.padding = '0';
+        avatar.style.overflow = 'hidden';
+        avatar.innerHTML = '<img src="'+escapeAttr(imageUrl)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.parentElement.style.padding=\'8px\';this.remove();">';
+      }
+    }
+
+    // Prefetch images for all three metric winners
+    var itemsToFetch = [byUnits[0], byRevenue[0], byProfit[0]]
+      .filter(Boolean)
+      .map(function(i){ return i.label; })
+      .filter(function(l,i,a){ return a.indexOf(l)===i; }); // dedupe
+
+    itemsToFetch.forEach(async function(label){
+      await fetchBSImage(label);
+      // Apply immediately if this is the currently shown item
+      var currentName = document.getElementById('bsItemName');
+      if(currentName && currentName.textContent && label.startsWith(currentName.textContent.replace('…',''))){
+        applyBSImage(label);
+      }
+    });
+
+    // Update renderBSContent to apply cached image on every tab switch
+    var _origRenderBSContent = renderBSContent;
+    renderBSContent = function(metric) {
+      _origRenderBSContent(metric);
+      var ranked = metric==='revenue' ? byRevenue : metric==='profit' ? byProfit : byUnits;
+      if(ranked[0]) applyBSImage(ranked[0].label);
+    };
 
     // Wire tabs
     el.querySelectorAll('.bs-tab').forEach(function(btn){
