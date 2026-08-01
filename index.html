@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.8</span>
+    <span class="version-pill">v0.9</span>
   </div>
 </div>
 
@@ -3545,10 +3545,31 @@
       return;
     }
     var top = sorted[0][1];
+    // Show content immediately with placeholder image
     el.innerHTML =
       '<span class="badge" style="background:var(--green-dim); color:var(--green); margin-bottom:14px; display:inline-flex;">★ Best seller<span style="color:var(--text-muted); margin-left:6px; font-weight:400;">This month</span></span>' +
-      '<div style="font-size:15px; font-weight:600; margin-top:6px;">'+escapeHtml(top.label)+'</div>' +
-      '<div style="font-size:13px; color:var(--text-secondary); margin-top:6px;">'+top.qty+' unit'+(top.qty===1?'':'s')+' sold this period</div>';
+      '<div style="display:flex;gap:16px;align-items:center;margin-top:6px;">' +
+        '<div id="bestSellerImg" style="width:90px;height:90px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+          '<span style="font-size:24px;opacity:0.3;">📦</span>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:15px;font-weight:600;">'+escapeHtml(top.label)+'</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">'+top.qty+' unit'+(top.qty===1?'':'s')+' sold this period</div>' +
+        '</div>' +
+      '</div>';
+
+    // Fetch image in background via eBay proxy
+    (async function(){
+      try {
+        var url = BACKUP_SCRIPT_URL + '?action=ebayimage&q=' + encodeURIComponent(top.label.slice(0,60));
+        var res = await fetch(url, { redirect: 'follow' });
+        var data = await res.json();
+        if(data.imageUrl) {
+          var imgEl = document.getElementById('bestSellerImg');
+          if(imgEl) imgEl.innerHTML = '<img src="'+escapeAttr(data.imageUrl)+'" style="width:90px;height:90px;object-fit:cover;border-radius:12px;" onerror="this.parentElement.innerHTML=\'<span style=font-size:24px;opacity:0.3>📦</span>\'">';
+        }
+      } catch(e) {}
+    })();
   }
 
   function renderOverviewRevenueProfitChart(){
