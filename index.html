@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.25</span>
+    <span class="version-pill">v0.26</span>
   </div>
 </div>
 
@@ -1137,6 +1137,7 @@
       </div>
       <div id="analyticsPlatformTableWrap"></div>
       <div id="analyticsUnrealisedSection" style="margin-top:20px;"></div>
+      <div id="analyticsVATSection" style="margin-top:20px;"></div>
     </div>
   </div>
 
@@ -1766,6 +1767,29 @@
 
             <div id="settingsSnapshotList" style="margin-top:16px;"></div>
           </div>
+        </div>
+
+        <!-- Platform CSV Importer -->
+        <div class="settings-panel" style="margin-top:16px;">
+          <div class="settings-row" style="align-items:flex-start;margin-bottom:14px;">
+            <div class="settings-row-label">
+              <div class="settings-row-title">Import Platform Sales (Viagogo / StubHub)</div>
+              <div class="settings-row-sub">Upload a CSV from Viagogo or StubHub to import your sales as entries. Duplicates are automatically skipped. Sales will appear on the Sales page and count toward your VAT tracker.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="flex:1;min-width:200px;">
+              <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Viagogo CSV</label>
+              <input type="file" id="viagogoImportFile" accept=".csv" style="font-size:12px;width:100%;">
+              <button class="btn btn-primary" id="viagogoImportBtn" style="font-size:12px;margin-top:8px;width:100%;">Import Viagogo</button>
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">StubHub CSV</label>
+              <input type="file" id="stubhubImportFile" accept=".csv" style="font-size:12px;width:100%;">
+              <button class="btn btn-primary" id="stubhubImportBtn" style="font-size:12px;margin-top:8px;width:100%;">Import StubHub</button>
+            </div>
+          </div>
+          <div id="platformImportResult" style="font-size:13px;color:var(--text-muted);"></div>
         </div>
 
         <div class="settings-section" id="settingsSection-backups">
@@ -2983,6 +3007,7 @@
     renderAnalyticsPreorderSummary();
     renderAnalyticsPlatformTable(sales);
     if(prefs.unrealisedProfit) renderAnalyticsUnrealised(purchases);
+    renderAnalyticsVAT(sales);
   }
 
   function renderAnalyticsUnrealised(purchases) {
@@ -3026,6 +3051,158 @@
       '<table><thead><tr><th>Item</th><th class="right">Cost</th><th class="right">Expected sell</th><th class="right">Est. profit</th><th class="right">ROI %</th></tr></thead>' +
       '<tbody>'+rows+'</tbody></table>' +
     '</div>';
+  }
+
+  function renderAnalyticsVAT(sales) {
+    var el = document.getElementById('analyticsVATSection');
+    if(!el) return;
+
+    var VAT_LIMIT    = 90000;
+    var VAT_WARN     = 72000; // 80%
+    var VAT_CAUTION  = 81000; // 90%
+
+    // Rolling 12 months from today
+    var now = new Date();
+    var twelveMonthsAgo = new Date(now);
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+    var cutoffISO = twelveMonthsAgo.toISOString().slice(0,10);
+
+    // Sales from tracked platforms in rolling 12 months
+    var platformTotals = {};
+    sales.filter(function(e){ return (e.date||'').slice(0,10) >= cutoffISO; }).forEach(function(e){
+      var platform = e.platform || 'Other';
+      if(!platformTotals[platform]) platformTotals[platform] = 0;
+      platformTotals[platform] += saleRevenue(e);
+    });
+
+    // Load manually entered external platform figures
+    var VAT_MANUAL_KEY = 'inventory:vatManual';
+    var manualFigures = {};
+    try { manualFigures = JSON.parse(localStorage.getItem(VAT_MANUAL_KEY) || '{}'); } catch(e) {}
+
+    // Total tracked revenue
+    var trackedTotal = Object.values(platformTotals).reduce(function(s,v){ return s+v; }, 0);
+    var manualTotal  = Object.values(manualFigures).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
+    var grandTotal   = trackedTotal + manualTotal;
+
+    var pct      = Math.min((grandTotal / VAT_LIMIT) * 100, 100);
+    var warnPct  = (VAT_WARN  / VAT_LIMIT) * 100;
+    var cautPct  = (VAT_CAUTION / VAT_LIMIT) * 100;
+
+    // Colour based on threshold
+    var barCol = grandTotal >= VAT_LIMIT ? 'var(--red)' :
+                 grandTotal >= VAT_CAUTION ? 'var(--red)' :
+                 grandTotal >= VAT_WARN ? 'var(--amber)' : 'var(--green)';
+
+    var statusMsg = grandTotal >= VAT_LIMIT ?
+      '🚨 You have exceeded the VAT registration threshold. Register immediately.' :
+      grandTotal >= VAT_CAUTION ?
+      '⚠️ You are within £'+(VAT_LIMIT-grandTotal).toFixed(0)+' of the threshold. Register soon.' :
+      grandTotal >= VAT_WARN ?
+      '⚠️ 80% warning — £'+(VAT_LIMIT-grandTotal).toFixed(0)+' remaining before mandatory registration.' :
+      '✅ £'+(VAT_LIMIT-grandTotal).toFixed(0)+' remaining before VAT registration threshold.';
+
+    // Platform breakdown rows
+    var allPlatforms = Object.assign({}, platformTotals);
+    Object.keys(manualFigures).forEach(function(p){ allPlatforms[p] = (allPlatforms[p]||0) + (parseFloat(manualFigures[p])||0); });
+
+    var platformRows = Object.keys(allPlatforms).sort(function(a,b){ return allPlatforms[b]-allPlatforms[a]; }).map(function(p){
+      var amt = allPlatforms[p];
+      var pctOfLimit = ((amt/VAT_LIMIT)*100).toFixed(1);
+      var isManual = !!manualFigures[p];
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border);">' +
+        '<div style="width:120px;font-size:13px;font-weight:500;">'+escapeHtml(p)+(isManual?' <span style="font-size:10px;color:var(--text-muted);">(manual)</span>':'')+'</div>' +
+        '<div style="flex:1;background:var(--surface-2);border-radius:4px;height:8px;overflow:hidden;">' +
+          '<div style="height:100%;width:'+Math.min(pctOfLimit,100)+'%;background:'+barCol+';border-radius:4px;transition:width 0.4s;"></div>' +
+        '</div>' +
+        '<div style="width:80px;text-align:right;font-size:13px;font-weight:600;">'+fmtMoney(amt)+'</div>' +
+        '<div style="width:50px;text-align:right;font-size:11px;color:var(--text-muted);">'+pctOfLimit+'%</div>' +
+        (isManual?'<button class="btn btn-danger-ghost" style="font-size:11px;padding:2px 8px;" data-vat-delete="'+escapeAttr(p)+'">✕</button>':'<div style="width:32px;"></div>')+
+      '</div>';
+    }).join('');
+
+    el.innerHTML =
+      '<div class="panel">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">' +
+          '<div>' +
+            '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px;">VAT Threshold Tracker</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);">Rolling 12-month taxable turnover · Threshold: £90,000</div>' +
+          '</div>' +
+          '<div style="font-size:13px;font-weight:600;color:'+barCol+';">'+statusMsg+'</div>' +
+        '</div>' +
+
+        // Main stat cards
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">' +
+          '<div class="stat-card" style="border-top:2px solid '+barCol+';background:linear-gradient(135deg,'+barCol.replace('var(--','').replace(')','')+'0d,transparent 60%);">' +
+            '<div class="label">Total Turnover (12mo)</div>' +
+            '<div class="value" style="color:'+barCol+';">'+fmtMoney(grandTotal)+'</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">'+pct.toFixed(1)+'% of £90,000</div>' +
+          '</div>' +
+          '<div class="stat-card" style="border-top:2px solid var(--green);">' +
+            '<div class="label">Remaining</div>' +
+            '<div class="value" style="color:var(--green);">'+fmtMoney(Math.max(0, VAT_LIMIT-grandTotal))+'</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Before mandatory registration</div>' +
+          '</div>' +
+          '<div class="stat-card" style="border-top:2px solid var(--amber);">' +
+            '<div class="label">80% Warning at</div>' +
+            '<div class="value" style="color:var(--amber);">'+fmtMoney(VAT_WARN)+'</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">£'+(Math.max(0,VAT_WARN-grandTotal)).toFixed(0)+' away</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Progress bar
+        '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);">' +
+          '<span>£0</span><span style="color:var(--amber);">£72k (80%)</span><span style="color:var(--red);">£90k</span>' +
+        '</div>' +
+        '<div style="position:relative;background:var(--surface-2);border-radius:8px;height:20px;overflow:visible;margin-bottom:20px;">' +
+          // Warning marker
+          '<div style="position:absolute;left:'+warnPct+'%;top:-4px;bottom:-4px;width:2px;background:var(--amber);border-radius:2px;" title="80% Warning"></div>' +
+          // Progress fill
+          '<div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:8px;transition:width 0.6s ease;position:relative;">' +
+            (pct > 5 ? '<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:#fff;">'+fmtMoney(grandTotal)+'</span>' : '') +
+          '</div>' +
+        '</div>' +
+
+        // Platform breakdown
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px;">Breakdown by Platform</div>' +
+        (platformRows || '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">No sales in the last 12 months.</div>') +
+
+        // Manual entry for StubHub/Viagogo
+        '<div style="margin-top:16px;padding:14px;background:var(--surface-2);border-radius:10px;">' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:10px;">Add external platform revenue (StubHub, Viagogo, etc.)</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<input type="text" id="vatPlatformName" placeholder="Platform name" style="flex:1;min-width:120px;font-size:12px;">' +
+            '<input type="number" id="vatPlatformAmount" placeholder="£ Revenue (last 12 months)" step="0.01" style="flex:1;min-width:140px;font-size:12px;">' +
+            '<button class="btn btn-primary" id="vatAddPlatformBtn" style="font-size:12px;white-space:nowrap;">Add</button>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Enter your total revenue from each external platform for the last 12 months. This is saved locally and included in your threshold calculation.</div>' +
+        '</div>' +
+
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);">⚠️ Not tax advice. VAT rules are complex — consult HMRC or a qualified accountant. Threshold based on taxable supplies in any rolling 12-month period.</div>' +
+      '</div>';
+
+    // Wire add platform button
+    document.getElementById('vatAddPlatformBtn').addEventListener('click', function(){
+      var name = document.getElementById('vatPlatformName').value.trim();
+      var amt  = parseFloat(document.getElementById('vatPlatformAmount').value);
+      if(!name || isNaN(amt) || amt < 0){ showToast('Enter a platform name and amount', true); return; }
+      manualFigures[name] = amt;
+      localStorage.setItem(VAT_MANUAL_KEY, JSON.stringify(manualFigures));
+      document.getElementById('vatPlatformName').value = '';
+      document.getElementById('vatPlatformAmount').value = '';
+      renderAnalyticsVAT(sales);
+      showToast(name + ' added — ' + fmtMoney(amt));
+    });
+
+    // Wire delete buttons
+    el.querySelectorAll('[data-vat-delete]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var p = this.getAttribute('data-vat-delete');
+        delete manualFigures[p];
+        localStorage.setItem(VAT_MANUAL_KEY, JSON.stringify(manualFigures));
+        renderAnalyticsVAT(sales);
+      });
+    });
   }
 
   function renderAnalyticsRevenueProfitChart(sales){
@@ -5866,6 +6043,110 @@
 
   // Populate on load if data section is already active
   renderSettingsSnapshotList();
+
+  // ============================================================
+  // PLATFORM CSV IMPORTERS — Viagogo & StubHub
+  // ============================================================
+  function parseCSV(text) {
+    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+    var headers = lines[0].split(',').map(function(h){ return h.replace(/^"|"$/g,'').trim(); });
+    return lines.slice(1).map(function(line){
+      var values = [], cur = '', inQ = false;
+      for(var i = 0; i < line.length; i++){
+        var c = line[i];
+        if(c==='"'){ inQ=!inQ; } else if(c===',' && !inQ){ values.push(cur); cur=''; } else { cur+=c; }
+      }
+      values.push(cur);
+      var obj = {};
+      headers.forEach(function(h,i){ obj[h] = (values[i]||'').trim(); });
+      return obj;
+    });
+  }
+
+  function importViagogoCSV(text) {
+    var rows = parseCSV(text);
+    var imported = 0, skipped = 0;
+    var existingOrderNums = new Set(entries.map(function(e){ return String(e.orderNumber); }));
+    rows.forEach(function(r){
+      if(r['LineItemType'] !== 'Order') return;
+      if(r['PaymentState'] !== 'Paid') return;
+      var orderId = String(r['LineItemId'] || r['PaymentId'] || '');
+      if(existingOrderNums.has(orderId)){ skipped++; return; }
+      var dateStr = (r['PaymentDate']||'').slice(0,10);
+      if(dateStr.indexOf('/')!==-1){
+        var parts = dateStr.split('/');
+        dateStr = parts[2]+'-'+parts[1]+'-'+parts[0];
+      }
+      entries.push({
+        id: 'vgg'+orderId.slice(-10)+Math.random().toString(36).slice(2,6),
+        item: r['EventName'] || 'Viagogo Sale',
+        qty: 1,
+        price: parseFloat(r['LineItemAmount']||0),
+        type: 'sale', date: dateStr, category: 'Tickets',
+        site: '', purchasedOn: '', orderNumber: orderId, postage: 0,
+        matchedItem: '', status: 'Sold', email: '', cardUsed: '',
+        notes: 'Imported from Viagogo CSV', platform: 'Viagogo',
+        venue: '', section: r['Section']||'', row: r['Row']||'', paidStatus: true
+      });
+      existingOrderNums.add(orderId);
+      imported++;
+    });
+    if(imported > 0){ saveEntries(); renderAll(); }
+    return { imported: imported, skipped: skipped };
+  }
+
+  function importStubHubCSV(text) {
+    var rows = parseCSV(text);
+    var imported = 0, skipped = 0;
+    var existingOrderNums = new Set(entries.map(function(e){ return String(e.orderNumber); }));
+    rows.forEach(function(r){
+      var orderId = String(r['Order Number']||r['Reference Number']||'');
+      if(existingOrderNums.has(orderId)){ skipped++; return; }
+      entries.push({
+        id: 'sbh'+orderId.slice(-10)+Math.random().toString(36).slice(2,6),
+        item: r['Event Name'] || 'StubHub Sale',
+        qty: parseInt(r['Quantity']||1),
+        price: parseFloat(r['Total Ticket Price']||0),
+        type: 'sale', date: (r['Payment Date']||'').slice(0,10),
+        category: 'Tickets', site: '', purchasedOn: '', orderNumber: orderId,
+        postage: 0, matchedItem: '', status: 'Sold', email: '', cardUsed: '',
+        notes: 'Imported from StubHub CSV. Payout: £'+(r['Payout']||0),
+        platform: 'StubHub', venue: r['Venue']||'', section: r['Section']||'',
+        row: r['Row']||'', seats: r['Seat']||'', eventDate: r['Event Date']||'',
+        paidStatus: true
+      });
+      existingOrderNums.add(orderId);
+      imported++;
+    });
+    if(imported > 0){ saveEntries(); renderAll(); }
+    return { imported: imported, skipped: skipped };
+  }
+
+  document.getElementById('viagogoImportBtn').addEventListener('click', function(){
+    var file = document.getElementById('viagogoImportFile').files[0];
+    if(!file){ showToast('Select a Viagogo CSV file first', true); return; }
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var result = importViagogoCSV(e.target.result);
+      var msg = '✅ Viagogo: '+result.imported+' imported, '+result.skipped+' skipped';
+      document.getElementById('platformImportResult').textContent = msg;
+      showToast(msg);
+    };
+    reader.readAsText(file, 'UTF-16LE');
+  });
+
+  document.getElementById('stubhubImportBtn').addEventListener('click', function(){
+    var file = document.getElementById('stubhubImportFile').files[0];
+    if(!file){ showToast('Select a StubHub CSV file first', true); return; }
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var result = importStubHubCSV(e.target.result);
+      var msg = '✅ StubHub: '+result.imported+' imported, '+result.skipped+' skipped';
+      document.getElementById('platformImportResult').textContent = msg;
+      showToast(msg);
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
 
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
