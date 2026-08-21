@@ -925,7 +925,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.26</span>
+    <span class="version-pill">v0.27</span>
   </div>
 </div>
 
@@ -3167,32 +3167,30 @@
         '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px;">Breakdown by Platform</div>' +
         (platformRows || '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">No sales in the last 12 months.</div>') +
 
-        // Manual entry for StubHub/Viagogo
+        // Historical revenue input (VAT only — doesn't create sale entries)
         '<div style="margin-top:16px;padding:14px;background:var(--surface-2);border-radius:10px;">' +
-          '<div style="font-size:12px;font-weight:600;margin-bottom:10px;">Add external platform revenue (StubHub, Viagogo, etc.)</div>' +
+          '<div style="font-size:12px;font-weight:600;margin-bottom:4px;">Historical revenue (VAT only)</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Add revenue from before your tracked period. This counts toward your VAT threshold only — no sale entries are created.</div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<input type="text" id="vatPlatformName" placeholder="Platform name" style="flex:1;min-width:120px;font-size:12px;">' +
-            '<input type="number" id="vatPlatformAmount" placeholder="£ Revenue (last 12 months)" step="0.01" style="flex:1;min-width:140px;font-size:12px;">' +
-            '<button class="btn btn-primary" id="vatAddPlatformBtn" style="font-size:12px;white-space:nowrap;">Add</button>' +
+            '<input type="text" id="vatHistPlatform" placeholder="Platform (e.g. eBay pre-Feb 2026)" style="flex:2;min-width:160px;font-size:12px;">' +
+            '<input type="number" id="vatHistAmount" placeholder="£ Revenue" step="0.01" style="flex:1;min-width:100px;font-size:12px;">' +
+            '<button class="btn btn-primary" id="vatHistAddBtn" style="font-size:12px;white-space:nowrap;">Add</button>' +
           '</div>' +
-          '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Enter your total revenue from each external platform for the last 12 months. This is saved locally and included in your threshold calculation.</div>' +
+          (Object.keys(manualFigures).length ? '<div style="margin-top:10px;">' +
+            Object.keys(manualFigures).map(function(p){
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:12px;">' +
+                '<span>'+escapeHtml(p)+'</span>' +
+                '<span style="display:flex;align-items:center;gap:10px;">' +
+                  '<strong>'+fmtMoney(parseFloat(manualFigures[p])||0)+'</strong>' +
+                  '<button class="btn btn-danger-ghost" style="font-size:11px;padding:2px 8px;" data-vat-delete="'+escapeAttr(p)+'">✕</button>' +
+                '</span>' +
+              '</div>';
+            }).join('') +
+          '</div>' : '') +
         '</div>' +
 
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);">⚠️ Not tax advice. VAT rules are complex — consult HMRC or a qualified accountant. Threshold based on taxable supplies in any rolling 12-month period.</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);">⚠️ Not tax advice. VAT rules are complex — consult HMRC or a qualified accountant. Threshold based on taxable supplies in any rolling 12-month period. Import Viagogo/StubHub sales via Settings → Data Manager.</div>' +
       '</div>';
-
-    // Wire add platform button
-    document.getElementById('vatAddPlatformBtn').addEventListener('click', function(){
-      var name = document.getElementById('vatPlatformName').value.trim();
-      var amt  = parseFloat(document.getElementById('vatPlatformAmount').value);
-      if(!name || isNaN(amt) || amt < 0){ showToast('Enter a platform name and amount', true); return; }
-      manualFigures[name] = amt;
-      localStorage.setItem(VAT_MANUAL_KEY, JSON.stringify(manualFigures));
-      document.getElementById('vatPlatformName').value = '';
-      document.getElementById('vatPlatformAmount').value = '';
-      renderAnalyticsVAT(sales);
-      showToast(name + ' added — ' + fmtMoney(amt));
-    });
 
     // Wire delete buttons
     el.querySelectorAll('[data-vat-delete]').forEach(function(btn){
@@ -3202,6 +3200,20 @@
         localStorage.setItem(VAT_MANUAL_KEY, JSON.stringify(manualFigures));
         renderAnalyticsVAT(sales);
       });
+    });
+
+    // Wire historical add button
+    var histAddBtn = document.getElementById('vatHistAddBtn');
+    if(histAddBtn) histAddBtn.addEventListener('click', function(){
+      var name = document.getElementById('vatHistPlatform').value.trim();
+      var amt  = parseFloat(document.getElementById('vatHistAmount').value);
+      if(!name || isNaN(amt) || amt < 0){ showToast('Enter a platform name and amount', true); return; }
+      manualFigures[name] = amt;
+      localStorage.setItem(VAT_MANUAL_KEY, JSON.stringify(manualFigures));
+      document.getElementById('vatHistPlatform').value = '';
+      document.getElementById('vatHistAmount').value = '';
+      renderAnalyticsVAT(sales);
+      showToast('Added £'+amt.toFixed(2)+' from '+name+' to VAT tracker');
     });
   }
 
