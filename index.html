@@ -636,6 +636,19 @@
   .placeholder-page h3 { color: var(--text-secondary); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
   .placeholder-page p { font-size: 13px; max-width: 360px; }
 
+  /* ── Bulk Edit ── */
+  .bulk-action-bar {
+    position: fixed; bottom: 0; left: var(--sidebar-w); right: 0;
+    background: var(--indigo); color: #fff;
+    padding: 12px 24px; display: flex; align-items: center; gap: 12px;
+    z-index: 200; transform: translateY(100%); transition: transform 0.25s ease;
+    box-shadow: 0 -4px 20px rgba(109,109,240,0.4);
+  }
+  .bulk-action-bar.visible { transform: translateY(0); }
+  .bulk-row-selected td { background: var(--indigo-dim) !important; }
+  .bulk-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--indigo); }
+  @media (max-width: 600px) { .bulk-action-bar { left: 0; bottom: 56px; } }
+
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.6); display: none;
@@ -925,7 +938,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.30</span>
+    <span class="version-pill">v0.31</span>
   </div>
 </div>
 
@@ -1146,6 +1159,7 @@
       <div><h1>Orders</h1><p>All logged purchase transactions</p></div>
       <div class="header-right">
         <input type="text" id="ordersSearch" placeholder="Search orders..." style="max-width:220px;">
+        <button class="btn" id="bulkEditOrdersBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addOrderBtn">+ Add</button>
       </div>
     </div>
@@ -1173,6 +1187,7 @@
       <div><h1>Sales</h1><p>Revenue across every selling channel</p></div>
       <div class="header-right">
         <input type="text" id="salesSearch" placeholder="Search sales..." style="max-width:220px;">
+        <button class="btn" id="bulkEditSalesBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addSaleBtn">+ Add</button>
       </div>
     </div>
@@ -1201,6 +1216,7 @@
       <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
       <div class="header-right">
         <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
+        <button class="btn" id="bulkEditInventoryBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
       </div>
     </div>
@@ -1305,6 +1321,7 @@
       <div class="header-right">
         <div id="expensesDateDisplay" style="font-size:12px;color:var(--text-muted);background:var(--surface-2);padding:6px 12px;border-radius:8px;border:1px solid var(--border);"></div>
         <button class="btn" id="exportExpensesBtn" style="font-size:12px;">↓ Export CSV</button>
+        <button class="btn" id="bulkEditExpensesBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addExpenseBtn">+ Add Expense</button>
       </div>
     </div>
@@ -1885,6 +1902,54 @@
         <button class="modal-close" id="tableMaximizeClose">✕</button>
       </div>
       <div class="table-maximize-body" id="tableMaximizeBody"></div>
+    </div>
+  </div>
+
+  <!-- BULK ACTION BAR -->
+  <div class="bulk-action-bar" id="bulkActionBar">
+    <span id="bulkCount" style="font-weight:700;font-size:13px;">0 selected</span>
+    <div style="flex:1;"></div>
+    <button class="btn" id="bulkSelectAllBtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:12px;">Select All</button>
+    <button class="btn" id="bulkEditBtn" style="background:#fff;color:var(--indigo);font-size:12px;font-weight:600;">✎ Edit Selected</button>
+    <button class="btn" id="bulkDeleteBtn" style="background:var(--red);border-color:var(--red);color:#fff;font-size:12px;">🗑 Delete</button>
+    <button class="btn" id="bulkCancelBtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:12px;">✕ Cancel</button>
+  </div>
+
+  <!-- BULK EDIT MODAL -->
+  <div class="modal-overlay" id="bulkEditModal" role="dialog" aria-modal="true" aria-labelledby="bulkEditTitle" style="display:none;">
+    <div class="modal-box" style="max-width:500px;width:100%;">
+      <div class="modal-box-head">
+        <h3 id="bulkEditTitle">Bulk Edit</h3>
+        <button class="modal-close" id="bulkEditCloseBtn" aria-label="Close">✕</button>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Only filled-in fields will be updated. Leave blank to keep existing values.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Status</label>
+          <select id="beStatus" style="width:100%;"><option value="">— keep existing —</option>
+            <option>Pending</option><option>Received</option><option>Listed</option><option>Sold</option>
+            <option>Cancelled</option><option>Returned</option><option>Pre-ordered</option><option>Order Issue</option>
+          </select></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Category</label>
+          <select id="beCategory" style="width:100%;"><option value="">— keep existing —</option></select></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Platform</label>
+          <input type="text" id="bePlatform" placeholder="e.g. eBay, StubHub" style="width:100%;"></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Card Used</label>
+          <select id="beCard" style="width:100%;"><option value="">— keep existing —</option></select></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Email</label>
+          <select id="beEmail" style="width:100%;"><option value="">— keep existing —</option></select></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Date</label>
+          <input type="date" id="beDate" style="width:100%;"></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Price (each)</label>
+          <input type="number" id="bePrice" placeholder="— keep existing —" step="0.01" style="width:100%;"></div>
+        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Site / Retailer</label>
+          <input type="text" id="beSite" placeholder="— keep existing —" style="width:100%;"></div>
+      </div>
+      <div style="margin-top:12px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Notes (appends to existing)</label>
+        <input type="text" id="beNotes" placeholder="— keep existing —" style="width:100%;"></div>
+      <div class="modal-actions">
+        <button class="btn" id="bulkEditCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="bulkEditSaveBtn">Apply to <span id="bulkEditCount">0</span> entries</button>
+      </div>
     </div>
   </div>
 
@@ -4693,11 +4758,7 @@
         var itemId = getItemId(e.item);
         var statusPill = '<div class="order-status-pill" data-order-id="'+escapeAttr(e.id)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(st)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
-        return '<tr>' +
-          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
-          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'"><span style="font-weight:500;">'+escapeHtml(e.item)+'</span></td>' +
-          '<td>'+statusPill+'</td>' +
-          '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.purchasedOn||e.date)+'</td>' +
+        return '<tr data-bulk-id="'+escapeAttr(e.id)+'">' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(e.price)+'</td>' +
           '<td class="right" style="font-weight:600;">'+fmtMoney((e.qty||1)*e.price)+'</td>' +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(prefs.unrealisedProfit ? fmtUnrealised(unrealisedProfitForEntry(e)) : escapeHtml(String(e.orderNumber||'—')))+'</td>' +
@@ -4728,6 +4789,7 @@
     wireSortableHeaders(wrap, renderOrdersTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.orders = renderOrdersTable;
+    injectBulkCheckboxes(wrap);
 
     // Pagination
     var prev = document.getElementById('ordersPrevBtn');
@@ -5686,6 +5748,28 @@
   });
 
   document.getElementById('addOrderBtn').addEventListener('click', function(){ openAddModal('order'); });
+
+  // Bulk Edit toggle buttons
+  document.getElementById('bulkEditOrdersBtn').addEventListener('click', function(){
+    setBulkMode('orders', !(_bulkMode && _bulkPage==='orders'));
+    this.style.background = (_bulkMode && _bulkPage==='orders') ? 'var(--indigo)' : '';
+    this.style.color = (_bulkMode && _bulkPage==='orders') ? '#fff' : '';
+  });
+  document.getElementById('bulkEditSalesBtn').addEventListener('click', function(){
+    setBulkMode('sales', !(_bulkMode && _bulkPage==='sales'));
+    this.style.background = (_bulkMode && _bulkPage==='sales') ? 'var(--indigo)' : '';
+    this.style.color = (_bulkMode && _bulkPage==='sales') ? '#fff' : '';
+  });
+  document.getElementById('bulkEditInventoryBtn').addEventListener('click', function(){
+    setBulkMode('inventory', !(_bulkMode && _bulkPage==='inventory'));
+    this.style.background = (_bulkMode && _bulkPage==='inventory') ? 'var(--indigo)' : '';
+    this.style.color = (_bulkMode && _bulkPage==='inventory') ? '#fff' : '';
+  });
+  document.getElementById('bulkEditExpensesBtn').addEventListener('click', function(){
+    setBulkMode('expenses', !(_bulkMode && _bulkPage==='expenses'));
+    this.style.background = (_bulkMode && _bulkPage==='expenses') ? 'var(--indigo)' : '';
+    this.style.color = (_bulkMode && _bulkPage==='expenses') ? '#fff' : '';
+  });
   document.getElementById('addInventoryBtn').addEventListener('click', function(){ openAddModal('inventoryAdjust'); });
   document.getElementById('addSaleBtn').addEventListener('click', function(){ openAddModal('sale'); });
 
@@ -5905,9 +5989,7 @@
         var salesBadge = linkedSaleQty>0 ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green-dim)':'var(--amber-dim)')+';color:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green)':'var(--amber)')+';">'+(linkedSaleQty>=(r.received+r.listed)?'✓ Fully sold':linkedSaleQty+' sold')+'</span>' : '';
         var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
-        return '<tr>' +
-          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
-          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
+        return '<tr data-bulk-id="'+escapeAttr(r.item)+'">' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
           '<td class="right" style="font-weight:600;color:'+(daysHeld===null?'var(--text-muted)':daysHeld<=30?'var(--green)':daysHeld<=60?'var(--amber)':'var(--red)')+';">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
@@ -5939,6 +6021,7 @@
     wireSortableHeaders(wrap, renderInventoryPage);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.inventory = renderInventoryPage;
+    injectBulkCheckboxes(wrap);
 
     var prev = document.getElementById('invPrevBtn');
     var next = document.getElementById('invNextBtn');
@@ -6223,6 +6306,165 @@
     reader.readAsText(file, 'UTF-8');
   });
 
+  // ============================================================
+  // BULK EDIT SYSTEM
+  // ============================================================
+  var _bulkMode    = false;
+  var _bulkPage    = null;  // which page is in bulk mode
+  var _bulkSelected = new Set(); // selected entry IDs
+
+  function setBulkMode(page, on) {
+    _bulkMode = on;
+    _bulkPage = on ? page : null;
+    if(!on) _bulkSelected.clear();
+    updateBulkBar();
+    // Re-render current page to add/remove checkboxes
+    if(page === 'orders')    renderOrdersTable();
+    if(page === 'sales')     renderSalesTable();
+    if(page === 'inventory') renderInventoryPage();
+    if(page === 'expenses')  renderExpensesTable();
+  }
+
+  function updateBulkBar() {
+    var bar = document.getElementById('bulkActionBar');
+    var count = _bulkSelected.size;
+    if(bar) {
+      bar.classList.toggle('visible', _bulkMode);
+      document.getElementById('bulkCount').textContent = count + ' selected';
+      document.getElementById('bulkEditCount').textContent = count;
+    }
+  }
+
+  function toggleBulkRow(id, checked) {
+    if(checked) _bulkSelected.add(id);
+    else _bulkSelected.delete(id);
+    var row = document.querySelector('tr[data-bulk-id="'+id+'"]');
+    if(row) row.classList.toggle('bulk-row-selected', checked);
+    updateBulkBar();
+  }
+
+  // Inject checkboxes into a rendered table
+  function injectBulkCheckboxes(wrap, idExtractor) {
+    if(!_bulkMode) return;
+    wrap.querySelectorAll('tbody tr').forEach(function(tr){
+      var id = tr.getAttribute('data-bulk-id');
+      if(!id) return;
+      var td = document.createElement('td');
+      td.style.cssText = 'width:36px;text-align:center;padding:0 8px;';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'bulk-checkbox';
+      cb.checked = _bulkSelected.has(id);
+      cb.addEventListener('change', function(){ toggleBulkRow(id, this.checked); });
+      td.appendChild(cb);
+      tr.insertBefore(td, tr.firstChild);
+      if(_bulkSelected.has(id)) tr.classList.add('bulk-row-selected');
+    });
+    // Add checkbox header
+    wrap.querySelectorAll('thead tr').forEach(function(tr){
+      var th = document.createElement('th');
+      th.style.cssText = 'width:36px;';
+      tr.insertBefore(th, tr.firstChild);
+    });
+  }
+
+  // Bulk Edit button wiring
+  document.getElementById('bulkSelectAllBtn').addEventListener('click', function(){
+    var allIds = Array.from(document.querySelectorAll('tr[data-bulk-id]')).map(function(tr){ return tr.getAttribute('data-bulk-id'); });
+    var allSelected = allIds.every(function(id){ return _bulkSelected.has(id); });
+    allIds.forEach(function(id){
+      if(allSelected) _bulkSelected.delete(id);
+      else _bulkSelected.add(id);
+    });
+    document.querySelectorAll('tr[data-bulk-id]').forEach(function(tr){
+      var id = tr.getAttribute('data-bulk-id');
+      tr.classList.toggle('bulk-row-selected', _bulkSelected.has(id));
+      var cb = tr.querySelector('.bulk-checkbox');
+      if(cb) cb.checked = _bulkSelected.has(id);
+    });
+    updateBulkBar();
+  });
+
+  document.getElementById('bulkCancelBtn').addEventListener('click', function(){
+    setBulkMode(_bulkPage, false);
+  });
+
+  document.getElementById('bulkDeleteBtn').addEventListener('click', function(){
+    if(!_bulkSelected.size){ showToast('Select entries first', true); return; }
+    if(!confirm('Delete '+_bulkSelected.size+' entries? This cannot be undone.')){ return; }
+    entries = entries.filter(function(e){ return !_bulkSelected.has(e.id); });
+    saveEntries();
+    renderAll();
+    _bulkSelected.clear();
+    updateBulkBar();
+    showToast('Deleted entries');
+  });
+
+  document.getElementById('bulkEditBtn').addEventListener('click', function(){
+    if(!_bulkSelected.size){ showToast('Select entries first', true); return; }
+    // Populate dropdowns
+    var catSel = document.getElementById('beCategory');
+    catSel.innerHTML = '<option value="">— keep existing —</option>' +
+      EXPENSE_CATEGORIES.map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
+    var cardSel = document.getElementById('beCard');
+    cardSel.innerHTML = '<option value="">— keep existing —</option>' +
+      (lists.cards||[]).map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
+    var emailSel = document.getElementById('beEmail');
+    emailSel.innerHTML = '<option value="">— keep existing —</option>' +
+      (lists.emails||[]).map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
+    document.getElementById('bulkEditCount').textContent = _bulkSelected.size;
+    // Clear fields
+    ['beStatus','beCategory','bePlatform','beCard','beEmail','beDate','bePrice','beSite','beNotes']
+      .forEach(function(id){ var el=document.getElementById(id); if(el){ if(el.tagName==='SELECT') el.value=''; else el.value=''; }});
+    var modal = document.getElementById('bulkEditModal');
+    modal.style.display = 'flex';
+    modal._prevFocus = document.activeElement;
+    setTimeout(function(){ document.getElementById('beStatus').focus(); }, 50);
+  });
+
+  function closeBulkEditModal() {
+    var modal = document.getElementById('bulkEditModal');
+    modal.style.display = 'none';
+    if(modal._prevFocus) modal._prevFocus.focus();
+  }
+
+  document.getElementById('bulkEditCloseBtn').addEventListener('click', closeBulkEditModal);
+  document.getElementById('bulkEditCancelBtn').addEventListener('click', closeBulkEditModal);
+
+  document.getElementById('bulkEditSaveBtn').addEventListener('click', function(){
+    var status   = document.getElementById('beStatus').value;
+    var category = document.getElementById('beCategory').value;
+    var platform = document.getElementById('bePlatform').value.trim();
+    var card     = document.getElementById('beCard').value;
+    var email    = document.getElementById('beEmail').value;
+    var date     = document.getElementById('beDate').value;
+    var price    = document.getElementById('bePrice').value;
+    var site     = document.getElementById('beSite').value.trim();
+    var notes    = document.getElementById('beNotes').value.trim();
+
+    var changed = 0;
+    entries.forEach(function(e){
+      if(!_bulkSelected.has(e.id)) return;
+      if(status)   e.status   = status;
+      if(category) e.category = category;
+      if(platform) e.platform = platform;
+      if(card)     e.cardUsed = card;
+      if(email)    e.email    = email;
+      if(date)     { e.date = date; if(e.type==='purchase') e.purchasedOn = date; }
+      if(price)    e.price = parseFloat(price);
+      if(site)     e.site = site;
+      if(notes)    e.notes = e.notes ? e.notes + ' | ' + notes : notes;
+      changed++;
+    });
+
+    saveEntries();
+    renderAll();
+    closeBulkEditModal();
+    _bulkSelected.clear();
+    updateBulkBar();
+    showToast('Updated '+changed+' entries ✓');
+  });
+
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
   document.querySelectorAll('#page-inventory .tab[data-inv-subtab]').forEach(function(tab){
@@ -6323,7 +6565,7 @@
         // Sold status pill
         var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
           '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
-        return '<tr>' +
+        return '<tr data-bulk-id="'+escapeAttr(e.id)+'">' +
           '<td style="font-size:11px;">'+fmtItemId(itemId||('S-'+e.id.slice(0,4)))+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'">' +
             '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>' +
@@ -6364,6 +6606,7 @@
     wireSortableHeaders(wrap, renderSalesTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.sales = renderSalesTable;
+    injectBulkCheckboxes(wrap);
 
     // Pagination controls
     var prev = document.getElementById('salesPrevBtn');
