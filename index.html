@@ -999,7 +999,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.33</span>
+    <span class="version-pill">v0.34</span>
   </div>
 </div>
 
@@ -1290,11 +1290,23 @@
     <div class="inv-subtab-content active" data-inv-subtab="stock">
       <div class="stat-row" id="invSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
 
-      <div class="seg" id="invStatusFilter" style="margin-bottom:16px; width:fit-content;">
-        <button class="seg-btn active" data-status="all">All</button>
-        <button class="seg-btn" data-status="Received">Received</button>
-        <button class="seg-btn" data-status="Listed">Listed</button>
-        <button class="seg-btn" data-status="Awaiting Return">Awaiting return</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="seg" id="invStatusFilter" style="width:fit-content;">
+          <button class="seg-btn active" data-status="all">All</button>
+          <button class="seg-btn" data-status="Received">Received</button>
+          <button class="seg-btn" data-status="Listed">Listed</button>
+          <button class="seg-btn" data-status="Awaiting Return">Awaiting return</button>
+        </div>
+        <div style="flex:1;"></div>
+        <div id="invGroupByTabs" style="display:none;gap:4px;">
+          <button class="inv-groupby-tab active" data-invgroupby="item" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:var(--surface-2);color:var(--text-primary);font-weight:600;">Item</button>
+          <button class="inv-groupby-tab" data-invgroupby="site" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Retailer</button>
+          <button class="inv-groupby-tab" data-invgroupby="brand" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Brand</button>
+        </div>
+        <div style="display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px;">
+          <button class="inv-view-tab active" data-invview="table" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">⊞ Table</button>
+          <button class="inv-view-tab" data-invview="grouped" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊟ Grouped</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -2080,6 +2092,8 @@
       if(s.tableSortState)     tableSortState      = s.tableSortState;
       if(s.ordersStatusFilter) ordersStatusFilter  = s.ordersStatusFilter;
       if(s.invStatusFilter)    invStatusFilter     = s.invStatusFilter;
+      if(s.invView)            _invView            = s.invView;
+      if(s.invGroupBy)         _invGroupBy         = s.invGroupBy;
       if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
     } catch(e) { console.warn('Could not load UI state:', e); }
   }
@@ -2096,6 +2110,8 @@
         tableSortState:     tableSortState,
         ordersStatusFilter: ordersStatusFilter,
         invStatusFilter:    invStatusFilter,
+        invView:            _invView,
+        invGroupBy:         _invGroupBy,
         salesPlatformFilter:salesPlatformFilter
       }));
     } catch(e) {}
@@ -4301,6 +4317,7 @@
     return {
       id: uid(), item: r.item.trim(), qty: r.qty, price: r.price, type: r.type,
       date: r.date || todayISO(), category: r.category || '', site: r.site || '',
+      brand: r.brand || '',
       purchasedOn: r.purchasedOn || r.date || todayISO(),
       orderNumber: r.orderNumber || '', postage: typeof r.postage === 'number' ? r.postage : 0,
       matchedItem: r.matchedItem || null,
@@ -5345,6 +5362,7 @@
         { key: 'currency', label: 'Currency', kind: 'select', options: ['GBP','USD','EUR','JPY','CAD','AUD','CHF','CNY'], default: 'GBP' },
         { key: 'expectedSellPrice', label: 'Expected sell price (optional)', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'site', label: 'Sourced from', kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
+        { key: 'brand', label: 'Brand', kind: 'text', placeholder: 'e.g. LEGO, Nike (optional)' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Received','Listed','Pending','Cancelled','Returned'], default: 'Pending' },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
         { key: 'email', label: 'Email used', kind: 'select', options: function(){ return lists.emails; } },
@@ -5361,6 +5379,7 @@
         { key: 'price',       label: 'Cost (each)',       kind: 'number',   placeholder: '0.00', step: '0.01' },
         { key: 'status',      label: 'Status',            kind: 'select',   options: ['Received','Listed','Pending','Cancelled','Awaiting Return','Returned'], default: 'Received' },
         { key: 'site',        label: 'Sourced from',      kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
+        { key: 'brand',       label: 'Brand',             kind: 'text',     placeholder: 'e.g. LEGO, Nike (optional)' },
         { key: 'purchasedOn', label: 'Date purchased',    kind: 'date' },
         { key: 'cardUsed',    label: 'Card used',         kind: 'select',   options: function(){ return lists.cards; } },
         { key: 'email',       label: 'Email used',        kind: 'select',   options: function(){ return lists.emails; } },
@@ -5745,6 +5764,7 @@
     // editing, say, an Income entry (no "site" field) would silently blank out
     // a site value that happened to exist from a different entry path.
     if(configKeys.site) row.site = values.site || '';
+    if(configKeys.brand) row.brand = values.brand || '';
     if(configKeys.cardUsed) row.cardUsed = values.cardUsed || '';
     if(configKeys.email) row.email = values.email || '';
     if(configKeys.notes) row.notes = values.notes || '';
@@ -5927,7 +5947,7 @@
       var key = (e.type === 'sale' && e.matchedItem) ? e.matchedItem : e.item;
       var st = e.type === 'purchase' ? effectiveStatus(e) : null;
       if(st === 'Pre-ordered' || st === 'Pre-sale') return;
-      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', dateBought: null, buyPrice: 0, orderNumber: '' };
+      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '' };
       var row = byItem[key];
       if(e.type === 'purchase'){
         if(st === 'Received') row.received += e.qty;
@@ -5937,6 +5957,7 @@
         if(e.email) row.email = e.email;
         if(e.cardUsed) row.cardUsed = e.cardUsed;
         if(e.site) row.site = e.site;
+        if(e.brand) row.brand = e.brand;
         if(e.orderNumber) row.orderNumber = e.orderNumber;
         var boughtOn = e.purchasedOn || e.date;
         if(!row.dateBought || boughtOn < row.dateBought) row.dateBought = boughtOn;
@@ -5991,6 +6012,12 @@
 
     var wrap = document.getElementById('invTableWrap');
     if(!allRows.length){ wrap.innerHTML = '<div class="empty-state" style="padding:60px;">Nothing currently in stock.</div>'; return; }
+
+    if(_invView === 'grouped'){
+      document.getElementById('invCountSub').textContent = allRows.length + ' item'+(allRows.length===1?'':'s')+' currently held';
+      renderInventoryGrouped(allRows, wrap);
+      return;
+    }
 
     var STATUS_COLORS = {
       'Received':      { c:'var(--green)',  bg:'var(--green-dim)',  dot:'#2dd4a0' },
@@ -6111,6 +6138,92 @@
           entries = entries.filter(function(e){ return !(e.type==='purchase'&&e.item===itemName); });
           saveEntries(); renderAll(); showToast('Deleted '+itemName);
         });
+      });
+    });
+  }
+
+  // Renders the Inventory "Grouped" view — cards grouped by Item, Retailer, or
+  // Brand, each showing a total cost and item/received counts, expandable to
+  // list the underlying items when grouping by Retailer or Brand.
+  function renderInventoryGrouped(allRows, wrap){
+    var dim = _invGroupBy; // 'item' | 'site' | 'brand'
+    var groupLabel = dim === 'site' ? 'retailer' : dim === 'brand' ? 'brand' : 'item';
+    var emptyLabel = dim === 'site' ? '(No retailer)' : '(No brand)';
+
+    function rowCost(r){ return (r.received + r.listed + r.soldQty) * (r.buyPrice || 0); }
+
+    var groupsHtml;
+    var groupCount;
+
+    if(dim === 'item'){
+      // Already item-level — one card per row, no further aggregation or expand.
+      var sorted = allRows.slice().sort(function(a,b){ return rowCost(b) - rowCost(a); });
+      groupCount = sorted.length;
+      groupsHtml = sorted.map(function(r){
+        var inStock = r.received + r.listed - r.soldQty;
+        return '<div class="inv-group-card" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">' +
+            '<div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'">'+escapeHtml(r.item)+'</div>' +
+            '<div style="font-weight:700;font-size:13px;white-space:nowrap;">'+fmtMoney(rowCost(r))+'</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+            '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:var(--indigo-dim);color:var(--indigo);font-weight:600;">'+(r.received+r.listed)+' item'+((r.received+r.listed)===1?'':'s')+'</span>' +
+            '<span style="font-size:11px;color:var(--text-muted);">'+r.received+' Received'+(inStock<0?' · <span style="color:var(--red);">'+inStock+' oversold</span>':'')+'</span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    } else {
+      var groups = {};
+      allRows.forEach(function(r){
+        var key = (r[dim] || '').trim() || emptyLabel;
+        if(!groups[key]) groups[key] = { name: key, rows: [], cost: 0, itemCount: 0, received: 0 };
+        var g = groups[key];
+        g.rows.push(r);
+        g.cost += rowCost(r);
+        g.itemCount += (r.received + r.listed);
+        g.received += r.received;
+      });
+      var groupList = Object.values(groups).sort(function(a,b){ return b.cost - a.cost; });
+      groupCount = groupList.length;
+      groupsHtml = groupList.map(function(g, gi){
+        var gKey = groupLabel + ':' + g.name;
+        var expanded = _invExpandedGroups.has(gKey);
+        var itemsHtml = expanded ? g.rows.slice().sort(function(a,b){ return rowCost(b)-rowCost(a); }).map(function(r){
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:12px;">' +
+            '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'">'+escapeHtml(r.item)+'</span>' +
+            '<span style="color:var(--text-muted);white-space:nowrap;">'+(r.received+r.listed)+' · '+fmtMoney(rowCost(r))+'</span>' +
+          '</div>';
+        }).join('') : '';
+        return '<div class="inv-group-card" data-group-key="'+escapeAttr(gKey)+'" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">' +
+          '<div class="inv-group-toggle" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:pointer;">' +
+            '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
+              '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0;">'+(expanded?'⌄':'›')+'</span>' +
+              '<span style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(g.name)+'">'+escapeHtml(g.name)+'</span>' +
+            '</div>' +
+            '<div style="font-weight:700;font-size:13px;white-space:nowrap;">'+fmtMoney(g.cost)+'</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+            '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:var(--indigo-dim);color:var(--indigo);font-weight:600;">'+g.itemCount+' item'+(g.itemCount===1?'':'s')+'</span>' +
+            '<span style="font-size:11px;color:var(--text-muted);">'+g.received+' Received</span>' +
+          '</div>' +
+          itemsHtml +
+        '</div>';
+      }).join('');
+    }
+
+    wrap.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:16px;">' +
+        '<span style="font-size:12px;color:var(--text-muted);">'+groupCount+' '+groupLabel+(groupCount===1?'':'s')+' · '+allRows.length+' items</span>' +
+        '<span style="font-size:13px;font-weight:700;">Total cost: <span style="color:var(--green);">'+fmtMoney(allRows.reduce(function(s,r){ return s+rowCost(r); },0))+'</span></span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:12px;">' + groupsHtml + '</div>';
+
+    wrap.querySelectorAll('.inv-group-toggle').forEach(function(el){
+      el.addEventListener('click', function(){
+        var key = this.closest('[data-group-key]').getAttribute('data-group-key');
+        if(_invExpandedGroups.has(key)) _invExpandedGroups.delete(key);
+        else _invExpandedGroups.add(key);
+        renderInventoryPage();
       });
     });
   }
@@ -6359,6 +6472,7 @@
         { key:'status',      label:'Status',      type:'select', options:['Pending','Received','Listed','Cancelled','Returned','Pre-ordered','Pre-sale'] },
         { key:'purchasedOn', label:'Date Bought', type:'date' },
         { key:'site',        label:'Site',        type:'text' },
+        { key:'brand',       label:'Brand',       type:'text' },
         { key:'email',       label:'Email',       type:'text' },
         { key:'price',       label:'Buy Price',   type:'number' },
         { key:'qty',         label:'Qty',         type:'number' },
@@ -6394,6 +6508,7 @@
         { key:'qty',         label:'Qty',         type:'number' },
         { key:'price',       label:'Buy Price',   type:'number' },
         { key:'site',        label:'Retailer',    type:'text' },
+        { key:'brand',       label:'Brand',       type:'text' },
         { key:'notes',       label:'Notes',       type:'text' }
       ],
       newRowDefaults: function(){ return { type:'purchase', item:'New item', status:'Received', date:todayISO(), purchasedOn:todayISO(), qty:1, price:0 }; }
@@ -6649,6 +6764,9 @@
     });
   });
   var invStatusFilter = 'all';
+  var _invView = 'table';       // 'table' | 'grouped'
+  var _invGroupBy = 'item';     // 'item' | 'site' | 'brand'
+  var _invExpandedGroups = new Set();
   document.querySelectorAll('#invStatusFilter .seg-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('#invStatusFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -6658,6 +6776,55 @@
       renderInventoryPage();
     });
   });
+
+  document.querySelectorAll('.inv-view-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      _invView = this.getAttribute('data-invview');
+      document.querySelectorAll('.inv-view-tab').forEach(function(t){
+        var active = t === btn;
+        t.classList.toggle('active', active);
+        t.style.background = active ? 'var(--indigo)' : 'transparent';
+        t.style.color = active ? '#fff' : 'var(--text-secondary)';
+      });
+      document.getElementById('invGroupByTabs').style.display = (_invView === 'grouped') ? 'flex' : 'none';
+      saveUIState();
+      renderInventoryPage();
+    });
+  });
+
+  document.querySelectorAll('.inv-groupby-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      _invGroupBy = this.getAttribute('data-invgroupby');
+      document.querySelectorAll('.inv-groupby-tab').forEach(function(t){
+        var active = t === btn;
+        t.classList.toggle('active', active);
+        t.style.background = active ? 'var(--surface-2)' : 'transparent';
+        t.style.fontWeight = active ? '600' : '400';
+        t.style.color = active ? 'var(--text-primary)' : 'var(--text-secondary)';
+      });
+      _invExpandedGroups.clear();
+      saveUIState();
+      renderInventoryPage();
+    });
+  });
+
+  // Apply persisted view state to the toggle buttons on load
+  (function initInvViewButtons(){
+    document.querySelectorAll('.inv-view-tab').forEach(function(t){
+      var active = t.getAttribute('data-invview') === _invView;
+      t.classList.toggle('active', active);
+      t.style.background = active ? 'var(--indigo)' : 'transparent';
+      t.style.color = active ? '#fff' : 'var(--text-secondary)';
+    });
+    document.querySelectorAll('.inv-groupby-tab').forEach(function(t){
+      var active = t.getAttribute('data-invgroupby') === _invGroupBy;
+      t.classList.toggle('active', active);
+      t.style.background = active ? 'var(--surface-2)' : 'transparent';
+      t.style.fontWeight = active ? '600' : '400';
+      t.style.color = active ? 'var(--text-primary)' : 'var(--text-secondary)';
+    });
+    document.getElementById('invGroupByTabs').style.display = (_invView === 'grouped') ? 'flex' : 'none';
+  })();
 
   // ---------- Sales tab ----------
   var salesPlatformFilter = 'all';
