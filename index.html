@@ -637,17 +637,78 @@
   .placeholder-page p { font-size: 13px; max-width: 360px; }
 
   /* ── Bulk Edit ── */
-  .bulk-action-bar {
-    position: fixed; bottom: 0; left: var(--sidebar-w); right: 0;
-    background: var(--indigo); color: #fff;
-    padding: 12px 24px; display: flex; align-items: center; gap: 12px;
-    z-index: 200; transform: translateY(100%); transition: transform 0.25s ease;
-    box-shadow: 0 -4px 20px rgba(109,109,240,0.4);
-  }
-  .bulk-action-bar.visible { transform: translateY(0); }
   .bulk-row-selected td { background: var(--indigo-dim) !important; }
   .bulk-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--indigo); }
-  @media (max-width: 600px) { .bulk-action-bar { left: 0; bottom: 56px; } }
+  .btn-sheet-trigger:hover { background: var(--indigo-dim); border-color: var(--indigo); color: var(--indigo); }
+
+  /* ── Bulk Edit Sheet (full-page inline editor) ── */
+  .sheet-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: var(--bg);
+    display: none; flex-direction: column;
+  }
+  .sheet-overlay.open { display: flex; }
+  .sheet-header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+  }
+  .sheet-header-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .sheet-header-title h2 { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .sheet-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .sheet-toolbar { display: flex; align-items: center; gap: 2px; }
+  .sheet-tool-btn {
+    width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; border: 1px solid transparent; background: none; color: var(--text-secondary);
+    cursor: pointer; font-size: 14px; padding: 0;
+  }
+  .sheet-tool-btn:hover { background: var(--surface-2); border-color: var(--border); color: var(--text-primary); }
+  .sheet-tool-btn:disabled { opacity: 0.3; cursor: default; }
+  .sheet-tool-btn:disabled:hover { background: none; border-color: transparent; color: var(--text-secondary); }
+  .sheet-tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 6px; }
+  .sheet-header-spacer { flex: 1; }
+  .sheet-header-actions { display: flex; align-items: center; gap: 8px; }
+  .sheet-subtitle {
+    padding: 8px 24px; font-size: 12px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+  }
+  .sheet-body { flex: 1; overflow: auto; }
+  .sheet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sheet-table thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--surface); text-align: left;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+    font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .sheet-table tbody td { border-bottom: 1px solid var(--border); padding: 0; }
+  .sheet-table tbody tr:hover td { background: var(--surface-2); }
+  .sheet-table tbody tr.sheet-row-new td { background: var(--green-dim); }
+  .sheet-table tbody tr.sheet-row-deleted td { background: var(--red-dim); opacity: 0.55; }
+  .sheet-checkbox-cell { width: 36px; text-align: center; padding: 8px !important; }
+  .sheet-cell-input, .sheet-table select {
+    width: 100%; height: 100%; background: transparent; border: 1px solid transparent;
+    color: var(--text-primary); padding: 9px 12px; font-size: 13px; font-family: inherit;
+    border-radius: 0; cursor: text;
+  }
+  .sheet-table select { cursor: pointer; }
+  .sheet-cell-input:focus, .sheet-table select:focus {
+    outline: none; border-color: var(--indigo); background: var(--surface-2); border-radius: 6px;
+    box-shadow: 0 0 0 1px var(--indigo);
+  }
+  .sheet-cell-input:disabled, .sheet-table select:disabled { color: var(--text-muted); cursor: default; text-decoration: line-through; }
+  .sheet-row-actions { padding: 4px 8px !important; white-space: nowrap; text-align: center; }
+  .sheet-row-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+  .sheet-row-btn:hover { background: var(--surface-2); color: var(--red); }
+  .sheet-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 24px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+  }
+  .sheet-footer-status { font-size: 12px; color: var(--text-muted); }
+  .sheet-footer-status.dirty { color: var(--amber); font-weight: 600; }
+  @media (max-width: 700px) {
+    .sheet-header { padding: 12px 14px; }
+    .sheet-subtitle { padding: 8px 14px; }
+    .sheet-footer { padding: 12px 14px; }
+  }
 
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -938,7 +999,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.31</span>
+    <span class="version-pill">v0.32</span>
   </div>
 </div>
 
@@ -1159,7 +1220,7 @@
       <div><h1>Orders</h1><p>All logged purchase transactions</p></div>
       <div class="header-right">
         <input type="text" id="ordersSearch" placeholder="Search orders..." style="max-width:220px;">
-        <button class="btn" id="bulkEditOrdersBtn">⊞ Bulk Edit</button>
+        <button class="btn btn-sheet-trigger" id="bulkEditOrdersBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addOrderBtn">+ Add</button>
       </div>
     </div>
@@ -1187,7 +1248,7 @@
       <div><h1>Sales</h1><p>Revenue across every selling channel</p></div>
       <div class="header-right">
         <input type="text" id="salesSearch" placeholder="Search sales..." style="max-width:220px;">
-        <button class="btn" id="bulkEditSalesBtn">⊞ Bulk Edit</button>
+        <button class="btn btn-sheet-trigger" id="bulkEditSalesBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addSaleBtn">+ Add</button>
       </div>
     </div>
@@ -1216,7 +1277,7 @@
       <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
       <div class="header-right">
         <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
-        <button class="btn" id="bulkEditInventoryBtn">⊞ Bulk Edit</button>
+        <button class="btn btn-sheet-trigger" id="bulkEditInventoryBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
       </div>
     </div>
@@ -1321,7 +1382,7 @@
       <div class="header-right">
         <div id="expensesDateDisplay" style="font-size:12px;color:var(--text-muted);background:var(--surface-2);padding:6px 12px;border-radius:8px;border:1px solid var(--border);"></div>
         <button class="btn" id="exportExpensesBtn" style="font-size:12px;">↓ Export CSV</button>
-        <button class="btn" id="bulkEditExpensesBtn">⊞ Bulk Edit</button>
+        <button class="btn btn-sheet-trigger" id="bulkEditExpensesBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addExpenseBtn">+ Add Expense</button>
       </div>
     </div>
@@ -1905,50 +1966,37 @@
     </div>
   </div>
 
-  <!-- BULK ACTION BAR -->
-  <div class="bulk-action-bar" id="bulkActionBar">
-    <span id="bulkCount" style="font-weight:700;font-size:13px;">0 selected</span>
-    <div style="flex:1;"></div>
-    <button class="btn" id="bulkSelectAllBtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:12px;">Select All</button>
-    <button class="btn" id="bulkEditBtn" style="background:#fff;color:var(--indigo);font-size:12px;font-weight:600;">✎ Edit Selected</button>
-    <button class="btn" id="bulkDeleteBtn" style="background:var(--red);border-color:var(--red);color:#fff;font-size:12px;">🗑 Delete</button>
-    <button class="btn" id="bulkCancelBtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);color:#fff;font-size:12px;">✕ Cancel</button>
-  </div>
-
-  <!-- BULK EDIT MODAL -->
-  <div class="modal-overlay" id="bulkEditModal" role="dialog" aria-modal="true" aria-labelledby="bulkEditTitle" style="display:none;">
-    <div class="modal-box" style="max-width:500px;width:100%;">
-      <div class="modal-box-head">
-        <h3 id="bulkEditTitle">Bulk Edit</h3>
-        <button class="modal-close" id="bulkEditCloseBtn" aria-label="Close">✕</button>
+  <!-- BULK EDIT SHEET (full-page inline spreadsheet editor) -->
+  <div class="sheet-overlay" id="sheetOverlay" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-header">
+      <div class="sheet-header-title">
+        <h2 id="sheetTitle">Bulk Edit</h2>
+        <span class="sheet-count" id="sheetCount">0 records</span>
       </div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Only filled-in fields will be updated. Leave blank to keep existing values.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Status</label>
-          <select id="beStatus" style="width:100%;"><option value="">— keep existing —</option>
-            <option>Pending</option><option>Received</option><option>Listed</option><option>Sold</option>
-            <option>Cancelled</option><option>Returned</option><option>Pre-ordered</option><option>Order Issue</option>
-          </select></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Category</label>
-          <select id="beCategory" style="width:100%;"><option value="">— keep existing —</option></select></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Platform</label>
-          <input type="text" id="bePlatform" placeholder="e.g. eBay, StubHub" style="width:100%;"></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Card Used</label>
-          <select id="beCard" style="width:100%;"><option value="">— keep existing —</option></select></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Email</label>
-          <select id="beEmail" style="width:100%;"><option value="">— keep existing —</option></select></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Date</label>
-          <input type="date" id="beDate" style="width:100%;"></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Price (each)</label>
-          <input type="number" id="bePrice" placeholder="— keep existing —" step="0.01" style="width:100%;"></div>
-        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Site / Retailer</label>
-          <input type="text" id="beSite" placeholder="— keep existing —" style="width:100%;"></div>
+      <div class="sheet-toolbar">
+        <button class="sheet-tool-btn" id="sheetUndoBtn" title="Undo last change" disabled>↶</button>
+        <div class="sheet-tool-sep"></div>
+        <button class="sheet-tool-btn" id="sheetAddBtn" title="Add row">+</button>
+        <button class="sheet-tool-btn" id="sheetDuplicateBtn" title="Duplicate selected" disabled>⧉</button>
+        <button class="sheet-tool-btn" id="sheetDeleteBtn" title="Delete selected" disabled>🗑</button>
+        <div class="sheet-tool-sep"></div>
+        <button class="sheet-tool-btn" id="sheetExportBtn" title="Export CSV">⇩</button>
       </div>
-      <div style="margin-top:12px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Notes (appends to existing)</label>
-        <input type="text" id="beNotes" placeholder="— keep existing —" style="width:100%;"></div>
-      <div class="modal-actions">
-        <button class="btn" id="bulkEditCancelBtn">Cancel</button>
-        <button class="btn btn-primary" id="bulkEditSaveBtn">Apply to <span id="bulkEditCount">0</span> entries</button>
+      <div class="sheet-header-spacer"></div>
+      <div class="sheet-header-actions">
+        <button class="btn" id="sheetCancelTopBtn">✕ Cancel</button>
+        <button class="btn btn-primary" id="sheetSaveTopBtn">Save</button>
+      </div>
+    </div>
+    <p class="sheet-subtitle">Tick rows to select several — the duplicate and delete tools apply to every selected row, and deletes are marked (not applied) until you save; <kbd style="font-family:inherit;">⌘/Ctrl+Z</kbd> undoes the last change.</p>
+    <div class="sheet-body">
+      <table class="sheet-table" id="sheetTable"></table>
+    </div>
+    <div class="sheet-footer">
+      <span class="sheet-footer-status" id="sheetFooterStatus">No unsaved changes</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="sheetCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="sheetSaveBtn">Save Changes</button>
       </div>
     </div>
   </div>
@@ -4789,7 +4837,6 @@
     wireSortableHeaders(wrap, renderOrdersTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.orders = renderOrdersTable;
-    injectBulkCheckboxes(wrap);
 
     // Pagination
     var prev = document.getElementById('ordersPrevBtn');
@@ -5749,27 +5796,11 @@
 
   document.getElementById('addOrderBtn').addEventListener('click', function(){ openAddModal('order'); });
 
-  // Bulk Edit toggle buttons
-  document.getElementById('bulkEditOrdersBtn').addEventListener('click', function(){
-    setBulkMode('orders', !(_bulkMode && _bulkPage==='orders'));
-    this.style.background = (_bulkMode && _bulkPage==='orders') ? 'var(--indigo)' : '';
-    this.style.color = (_bulkMode && _bulkPage==='orders') ? '#fff' : '';
-  });
-  document.getElementById('bulkEditSalesBtn').addEventListener('click', function(){
-    setBulkMode('sales', !(_bulkMode && _bulkPage==='sales'));
-    this.style.background = (_bulkMode && _bulkPage==='sales') ? 'var(--indigo)' : '';
-    this.style.color = (_bulkMode && _bulkPage==='sales') ? '#fff' : '';
-  });
-  document.getElementById('bulkEditInventoryBtn').addEventListener('click', function(){
-    setBulkMode('inventory', !(_bulkMode && _bulkPage==='inventory'));
-    this.style.background = (_bulkMode && _bulkPage==='inventory') ? 'var(--indigo)' : '';
-    this.style.color = (_bulkMode && _bulkPage==='inventory') ? '#fff' : '';
-  });
-  document.getElementById('bulkEditExpensesBtn').addEventListener('click', function(){
-    setBulkMode('expenses', !(_bulkMode && _bulkPage==='expenses'));
-    this.style.background = (_bulkMode && _bulkPage==='expenses') ? 'var(--indigo)' : '';
-    this.style.color = (_bulkMode && _bulkPage==='expenses') ? '#fff' : '';
-  });
+  // Bulk Edit buttons — open the full-page sheet editor
+  document.getElementById('bulkEditOrdersBtn').addEventListener('click', function(){ openSheet('orders'); });
+  document.getElementById('bulkEditSalesBtn').addEventListener('click', function(){ openSheet('sales'); });
+  document.getElementById('bulkEditInventoryBtn').addEventListener('click', function(){ openSheet('inventory'); });
+  document.getElementById('bulkEditExpensesBtn').addEventListener('click', function(){ openSheet('expenses'); });
   document.getElementById('addInventoryBtn').addEventListener('click', function(){ openAddModal('inventoryAdjust'); });
   document.getElementById('addSaleBtn').addEventListener('click', function(){ openAddModal('sale'); });
 
@@ -6021,7 +6052,6 @@
     wireSortableHeaders(wrap, renderInventoryPage);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.inventory = renderInventoryPage;
-    injectBulkCheckboxes(wrap);
 
     var prev = document.getElementById('invPrevBtn');
     var next = document.getElementById('invNextBtn');
@@ -6307,162 +6337,298 @@
   });
 
   // ============================================================
-  // BULK EDIT SYSTEM
+  // BULK EDIT SHEET — full-page inline spreadsheet editor
   // ============================================================
-  var _bulkMode    = false;
-  var _bulkPage    = null;  // which page is in bulk mode
-  var _bulkSelected = new Set(); // selected entry IDs
-
-  function setBulkMode(page, on) {
-    _bulkMode = on;
-    _bulkPage = on ? page : null;
-    if(!on) _bulkSelected.clear();
-    updateBulkBar();
-    // Re-render current page to add/remove checkboxes
-    if(page === 'orders')    renderOrdersTable();
-    if(page === 'sales')     renderSalesTable();
-    if(page === 'inventory') renderInventoryPage();
-    if(page === 'expenses')  renderExpensesTable();
-  }
-
-  function updateBulkBar() {
-    var bar = document.getElementById('bulkActionBar');
-    var count = _bulkSelected.size;
-    if(bar) {
-      bar.classList.toggle('visible', _bulkMode);
-      document.getElementById('bulkCount').textContent = count + ' selected';
-      document.getElementById('bulkEditCount').textContent = count;
+  // Column configs per page. Each page pulls its rows straight from
+  // `entries`, filtered the same way its normal table filters them, so
+  // edits here map 1:1 onto real entry records (fixes the old Inventory
+  // bulk-edit using item name instead of a true entry id).
+  var SHEET_CONFIGS = {
+    orders: {
+      title: 'Orders',
+      type: 'purchase',
+      filter: function(e){ var st = effectiveStatus(e); return st==='Pending' || st==='Cancelled' || st==='Returned'; },
+      columns: [
+        { key:'item',        label:'Product',     type:'text' },
+        { key:'status',      label:'Status',      type:'select', options:['Pending','Received','Listed','Cancelled','Returned','Pre-ordered','Pre-sale'] },
+        { key:'purchasedOn', label:'Date Bought', type:'date' },
+        { key:'site',        label:'Site',        type:'text' },
+        { key:'email',       label:'Email',       type:'text' },
+        { key:'price',       label:'Buy Price',   type:'number' },
+        { key:'qty',         label:'Qty',         type:'number' },
+        { key:'orderNumber', label:'Order No',    type:'text' },
+        { key:'cardUsed',    label:'Card Used',   type:'text' },
+        { key:'notes',       label:'Notes',       type:'text' }
+      ],
+      newRowDefaults: function(){ return { type:'purchase', item:'New item', status:'Received', date:todayISO(), purchasedOn:todayISO(), qty:1, price:0 }; }
+    },
+    sales: {
+      title: 'Sales',
+      type: 'sale',
+      filter: function(){ return true; },
+      columns: [
+        { key:'item',     label:'Product',       type:'text' },
+        { key:'platform', label:'Sell Platform', type:'select', options:['eBay','Viagogo','StubHub','Direct Sale','Other'] },
+        { key:'date',     label:'Sell Date',     type:'date' },
+        { key:'price',    label:'Sell Price',    type:'number' },
+        { key:'qty',      label:'Qty',           type:'number' },
+        { key:'postage',  label:'Shipping',      type:'number' },
+        { key:'notes',    label:'Notes',         type:'text' }
+      ],
+      newRowDefaults: function(){ return { type:'sale', item:'New item', platform:'Other', date:todayISO(), qty:1, price:0, postage:0 }; }
+    },
+    inventory: {
+      title: 'Inventory',
+      type: 'purchase',
+      filter: function(e){ var st = effectiveStatus(e); return st==='Received' || st==='Listed' || st==='Awaiting Return'; },
+      columns: [
+        { key:'item',        label:'Product',     type:'text' },
+        { key:'status',      label:'Status',      type:'select', options:['Received','Listed','Awaiting Return','Returned','Order Issue'] },
+        { key:'purchasedOn', label:'Date Bought', type:'date' },
+        { key:'qty',         label:'Qty',         type:'number' },
+        { key:'price',       label:'Buy Price',   type:'number' },
+        { key:'site',        label:'Retailer',    type:'text' },
+        { key:'notes',       label:'Notes',       type:'text' }
+      ],
+      newRowDefaults: function(){ return { type:'purchase', item:'New item', status:'Received', date:todayISO(), purchasedOn:todayISO(), qty:1, price:0 }; }
+    },
+    expenses: {
+      title: 'Expenses',
+      type: 'expense',
+      filter: function(){ return true; },
+      columns: [
+        { key:'item',       label:'Expense',    type:'text' },
+        { key:'category',   label:'Category',   type:'select', options:EXPENSE_CATEGORIES },
+        { key:'price',      label:'Amount',     type:'number' },
+        { key:'qty',        label:'Qty',        type:'number' },
+        { key:'date',       label:'Date',       type:'date' },
+        { key:'recurrence', label:'Recurrence', type:'select', options:['One-off','Weekly','Monthly','Yearly'] },
+        { key:'cardUsed',   label:'Card Used',  type:'text' },
+        { key:'notes',      label:'Notes',      type:'text' }
+      ],
+      newRowDefaults: function(){ return { type:'expense', item:'New expense', category:'Other', date:todayISO(), qty:1, price:0, recurrence:'One-off' }; }
     }
+  };
+
+  var _sheetPage     = null;
+  var _sheetRows      = [];        // working copy of entries for this page
+  var _sheetDeleted   = new Set(); // ids marked for deletion (applied on save)
+  var _sheetSelected  = new Set(); // ids checked in the sheet
+  var _sheetUndoStack = [];
+  var _sheetDirty     = false;
+
+  function snapshotSheet(){
+    _sheetUndoStack.push({ rows: JSON.parse(JSON.stringify(_sheetRows)), deleted: new Set(_sheetDeleted) });
+    if(_sheetUndoStack.length > 50) _sheetUndoStack.shift();
+    _sheetDirty = true;
   }
 
-  function toggleBulkRow(id, checked) {
-    if(checked) _bulkSelected.add(id);
-    else _bulkSelected.delete(id);
-    var row = document.querySelector('tr[data-bulk-id="'+id+'"]');
-    if(row) row.classList.toggle('bulk-row-selected', checked);
-    updateBulkBar();
+  function openSheet(page){
+    var cfg = SHEET_CONFIGS[page];
+    if(!cfg) return;
+    _sheetPage = page;
+    _sheetRows = entries.filter(function(e){ return e.type === cfg.type && cfg.filter(e); })
+      .map(function(e){ return JSON.parse(JSON.stringify(e)); });
+    _sheetDeleted = new Set();
+    _sheetSelected = new Set();
+    _sheetUndoStack = [];
+    _sheetDirty = false;
+    document.getElementById('sheetTitle').textContent = 'Bulk Edit — ' + cfg.title;
+    renderSheetTable();
+    updateSheetFooter();
+    updateSheetToolbarState();
+    document.getElementById('sheetOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
   }
 
-  // Inject checkboxes into a rendered table
-  function injectBulkCheckboxes(wrap, idExtractor) {
-    if(!_bulkMode) return;
-    wrap.querySelectorAll('tbody tr').forEach(function(tr){
-      var id = tr.getAttribute('data-bulk-id');
-      if(!id) return;
-      var td = document.createElement('td');
-      td.style.cssText = 'width:36px;text-align:center;padding:0 8px;';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'bulk-checkbox';
-      cb.checked = _bulkSelected.has(id);
-      cb.addEventListener('change', function(){ toggleBulkRow(id, this.checked); });
-      td.appendChild(cb);
-      tr.insertBefore(td, tr.firstChild);
-      if(_bulkSelected.has(id)) tr.classList.add('bulk-row-selected');
+  function closeSheet(force){
+    if(_sheetDirty && !force){
+      showConfirmDialog('Discard unsaved changes?', 'Your edits in this sheet have not been saved.', function(){ closeSheet(true); });
+      return;
+    }
+    document.getElementById('sheetOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+    _sheetPage = null; _sheetRows = []; _sheetDeleted = new Set(); _sheetSelected = new Set(); _sheetUndoStack = []; _sheetDirty = false;
+  }
+
+  function updateSheetFooter(){
+    var n = _sheetRows.length, delCount = _sheetDeleted.size;
+    document.getElementById('sheetCount').textContent = n + ' record' + (n===1?'':'s') + (delCount ? ' · ' + delCount + ' marked for deletion' : '');
+    var el = document.getElementById('sheetFooterStatus');
+    if(_sheetDirty){ el.textContent = 'Unsaved changes'; el.classList.add('dirty'); }
+    else { el.textContent = 'No unsaved changes'; el.classList.remove('dirty'); }
+  }
+
+  function updateSheetToolbarState(){
+    document.getElementById('sheetUndoBtn').disabled = _sheetUndoStack.length === 0;
+    var hasSelection = _sheetSelected.size > 0;
+    document.getElementById('sheetDuplicateBtn').disabled = !hasSelection;
+    document.getElementById('sheetDeleteBtn').disabled = !hasSelection;
+  }
+
+  function renderSheetTable(){
+    var cfg = SHEET_CONFIGS[_sheetPage];
+    var table = document.getElementById('sheetTable');
+    var theadCols = '<th class="sheet-checkbox-cell"><input type="checkbox" class="bulk-checkbox" id="sheetSelectAll"></th>' +
+      cfg.columns.map(function(c){ return '<th>'+escapeHtml(c.label)+'</th>'; }).join('') +
+      '<th style="width:40px;"></th>';
+    var rowsHtml = _sheetRows.map(function(r, idx){
+      var isDeleted = _sheetDeleted.has(r.id);
+      var isSelected = _sheetSelected.has(r.id);
+      var cellsHtml = cfg.columns.map(function(c){
+        var val = r[c.key];
+        if(c.type === 'select'){
+          var opts = c.options.map(function(o){ return '<option value="'+escapeAttr(o)+'"'+(val===o?' selected':'')+'>'+escapeHtml(o)+'</option>'; }).join('');
+          return '<td class="sheet-cell"><select data-row="'+idx+'" data-key="'+c.key+'"'+(isDeleted?' disabled':'')+'>'+opts+'</select></td>';
+        }
+        var inputType = c.type === 'date' ? 'date' : (c.type === 'number' ? 'number' : 'text');
+        var stepAttr = c.type === 'number' ? ' step="0.01"' : '';
+        return '<td class="sheet-cell"><input type="'+inputType+'" class="sheet-cell-input" data-row="'+idx+'" data-key="'+c.key+'" value="'+escapeAttr(val!=null?val:'')+'"'+stepAttr+(isDeleted?' disabled':'')+'></td>';
+      }).join('');
+      return '<tr data-row-id="'+escapeAttr(r.id)+'" class="'+(isDeleted?'sheet-row-deleted':(r._isNew?'sheet-row-new':''))+'">' +
+        '<td class="sheet-checkbox-cell"><input type="checkbox" class="bulk-checkbox sheet-row-check" data-row-id="'+escapeAttr(r.id)+'"'+(isSelected?' checked':'')+'></td>' +
+        cellsHtml +
+        '<td class="sheet-row-actions"><button class="sheet-row-btn" data-toggle-delete="'+escapeAttr(r.id)+'" title="'+(isDeleted?'Restore row':'Delete row')+'">'+(isDeleted?'↺':'🗑')+'</button></td>' +
+      '</tr>';
+    }).join('');
+    table.innerHTML = '<thead><tr>'+theadCols+'</tr></thead><tbody>'+rowsHtml+'</tbody>';
+
+    // Commit cell edits on change (blur/enter), not every keystroke
+    table.querySelectorAll('[data-row][data-key]').forEach(function(el){
+      el.addEventListener('change', function(){
+        var idx = parseInt(this.getAttribute('data-row'), 10);
+        var key = this.getAttribute('data-key');
+        snapshotSheet();
+        var v = this.value;
+        if(this.type === 'number') v = v === '' ? 0 : parseFloat(v);
+        _sheetRows[idx][key] = v;
+        updateSheetFooter();
+      });
     });
-    // Add checkbox header
-    wrap.querySelectorAll('thead tr').forEach(function(tr){
-      var th = document.createElement('th');
-      th.style.cssText = 'width:36px;';
-      tr.insertBefore(th, tr.firstChild);
+
+    table.querySelectorAll('.sheet-row-check').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        var id = this.getAttribute('data-row-id');
+        if(this.checked) _sheetSelected.add(id); else _sheetSelected.delete(id);
+        updateSheetToolbarState();
+      });
+    });
+
+    var selectAll = document.getElementById('sheetSelectAll');
+    if(selectAll){
+      selectAll.addEventListener('change', function(){
+        var checked = this.checked;
+        _sheetRows.forEach(function(r){ if(checked) _sheetSelected.add(r.id); else _sheetSelected.delete(r.id); });
+        renderSheetTable();
+        updateSheetToolbarState();
+      });
+    }
+
+    table.querySelectorAll('[data-toggle-delete]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-toggle-delete');
+        snapshotSheet();
+        if(_sheetDeleted.has(id)) _sheetDeleted.delete(id); else _sheetDeleted.add(id);
+        renderSheetTable();
+        updateSheetFooter();
+        updateSheetToolbarState();
+      });
     });
   }
 
-  // Bulk Edit button wiring
-  document.getElementById('bulkSelectAllBtn').addEventListener('click', function(){
-    var allIds = Array.from(document.querySelectorAll('tr[data-bulk-id]')).map(function(tr){ return tr.getAttribute('data-bulk-id'); });
-    var allSelected = allIds.every(function(id){ return _bulkSelected.has(id); });
-    allIds.forEach(function(id){
-      if(allSelected) _bulkSelected.delete(id);
-      else _bulkSelected.add(id);
-    });
-    document.querySelectorAll('tr[data-bulk-id]').forEach(function(tr){
-      var id = tr.getAttribute('data-bulk-id');
-      tr.classList.toggle('bulk-row-selected', _bulkSelected.has(id));
-      var cb = tr.querySelector('.bulk-checkbox');
-      if(cb) cb.checked = _bulkSelected.has(id);
-    });
-    updateBulkBar();
-  });
+  function sheetAddRow(){
+    var cfg = SHEET_CONFIGS[_sheetPage];
+    snapshotSheet();
+    var row = buildEntryObject(cfg.newRowDefaults());
+    row._isNew = true;
+    _sheetRows.unshift(row);
+    renderSheetTable();
+    updateSheetFooter();
+  }
 
-  document.getElementById('bulkCancelBtn').addEventListener('click', function(){
-    setBulkMode(_bulkPage, false);
-  });
+  function sheetDuplicateSelected(){
+    if(!_sheetSelected.size) return;
+    snapshotSheet();
+    var clones = _sheetRows.filter(function(r){ return _sheetSelected.has(r.id); }).map(function(r){
+      var c = JSON.parse(JSON.stringify(r));
+      c.id = uid();
+      c._isNew = true;
+      return c;
+    });
+    _sheetRows = clones.concat(_sheetRows);
+    _sheetSelected = new Set();
+    renderSheetTable();
+    updateSheetFooter();
+    updateSheetToolbarState();
+  }
 
-  document.getElementById('bulkDeleteBtn').addEventListener('click', function(){
-    if(!_bulkSelected.size){ showToast('Select entries first', true); return; }
-    if(!confirm('Delete '+_bulkSelected.size+' entries? This cannot be undone.')){ return; }
-    entries = entries.filter(function(e){ return !_bulkSelected.has(e.id); });
+  function sheetDeleteSelected(){
+    if(!_sheetSelected.size) return;
+    snapshotSheet();
+    _sheetSelected.forEach(function(id){ _sheetDeleted.add(id); });
+    renderSheetTable();
+    updateSheetFooter();
+  }
+
+  function sheetUndo(){
+    if(!_sheetUndoStack.length) return;
+    var last = _sheetUndoStack.pop();
+    _sheetRows = last.rows;
+    _sheetDeleted = last.deleted;
+    _sheetDirty = _sheetUndoStack.length > 0;
+    renderSheetTable();
+    updateSheetFooter();
+    updateSheetToolbarState();
+  }
+
+  function sheetExportCSV(){
+    var cfg = SHEET_CONFIGS[_sheetPage];
+    var headers = cfg.columns.map(function(c){ return c.label; });
+    var lines = [headers.join(',')];
+    _sheetRows.forEach(function(r){
+      var vals = cfg.columns.map(function(c){
+        var v = r[c.key] != null ? String(r[c.key]) : '';
+        if(v.indexOf(',') !== -1 || v.indexOf('"') !== -1) v = '"' + v.replace(/"/g,'""') + '"';
+        return v;
+      });
+      lines.push(vals.join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type:'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = cfg.title.toLowerCase() + '-bulk-edit-' + todayISO() + '.csv';
+    a.click();
+  }
+
+  function saveSheet(){
+    var cfg = SHEET_CONFIGS[_sheetPage];
+    entries = entries.filter(function(e){ return !(_sheetDeleted.has(e.id) && e.type === cfg.type); });
+    _sheetRows.forEach(function(r){
+      if(_sheetDeleted.has(r.id)) return;
+      delete r._isNew;
+      var idx = entries.findIndex(function(e){ return e.id === r.id; });
+      if(idx !== -1) entries[idx] = r; else entries.push(r);
+    });
     saveEntries();
     renderAll();
-    _bulkSelected.clear();
-    updateBulkBar();
-    showToast('Deleted entries');
-  });
-
-  document.getElementById('bulkEditBtn').addEventListener('click', function(){
-    if(!_bulkSelected.size){ showToast('Select entries first', true); return; }
-    // Populate dropdowns
-    var catSel = document.getElementById('beCategory');
-    catSel.innerHTML = '<option value="">— keep existing —</option>' +
-      EXPENSE_CATEGORIES.map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
-    var cardSel = document.getElementById('beCard');
-    cardSel.innerHTML = '<option value="">— keep existing —</option>' +
-      (lists.cards||[]).map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
-    var emailSel = document.getElementById('beEmail');
-    emailSel.innerHTML = '<option value="">— keep existing —</option>' +
-      (lists.emails||[]).map(function(c){ return '<option>'+escapeHtml(c)+'</option>'; }).join('');
-    document.getElementById('bulkEditCount').textContent = _bulkSelected.size;
-    // Clear fields
-    ['beStatus','beCategory','bePlatform','beCard','beEmail','beDate','bePrice','beSite','beNotes']
-      .forEach(function(id){ var el=document.getElementById(id); if(el){ if(el.tagName==='SELECT') el.value=''; else el.value=''; }});
-    var modal = document.getElementById('bulkEditModal');
-    modal.style.display = 'flex';
-    modal._prevFocus = document.activeElement;
-    setTimeout(function(){ document.getElementById('beStatus').focus(); }, 50);
-  });
-
-  function closeBulkEditModal() {
-    var modal = document.getElementById('bulkEditModal');
-    modal.style.display = 'none';
-    if(modal._prevFocus) modal._prevFocus.focus();
+    showToast('Saved changes ✓');
+    closeSheet(true);
   }
 
-  document.getElementById('bulkEditCloseBtn').addEventListener('click', closeBulkEditModal);
-  document.getElementById('bulkEditCancelBtn').addEventListener('click', closeBulkEditModal);
+  document.getElementById('sheetUndoBtn').addEventListener('click', sheetUndo);
+  document.getElementById('sheetAddBtn').addEventListener('click', sheetAddRow);
+  document.getElementById('sheetDuplicateBtn').addEventListener('click', sheetDuplicateSelected);
+  document.getElementById('sheetDeleteBtn').addEventListener('click', sheetDeleteSelected);
+  document.getElementById('sheetExportBtn').addEventListener('click', sheetExportCSV);
+  document.getElementById('sheetCancelTopBtn').addEventListener('click', function(){ closeSheet(false); });
+  document.getElementById('sheetSaveTopBtn').addEventListener('click', saveSheet);
+  document.getElementById('sheetCancelBtn').addEventListener('click', function(){ closeSheet(false); });
+  document.getElementById('sheetSaveBtn').addEventListener('click', saveSheet);
 
-  document.getElementById('bulkEditSaveBtn').addEventListener('click', function(){
-    var status   = document.getElementById('beStatus').value;
-    var category = document.getElementById('beCategory').value;
-    var platform = document.getElementById('bePlatform').value.trim();
-    var card     = document.getElementById('beCard').value;
-    var email    = document.getElementById('beEmail').value;
-    var date     = document.getElementById('beDate').value;
-    var price    = document.getElementById('bePrice').value;
-    var site     = document.getElementById('beSite').value.trim();
-    var notes    = document.getElementById('beNotes').value.trim();
-
-    var changed = 0;
-    entries.forEach(function(e){
-      if(!_bulkSelected.has(e.id)) return;
-      if(status)   e.status   = status;
-      if(category) e.category = category;
-      if(platform) e.platform = platform;
-      if(card)     e.cardUsed = card;
-      if(email)    e.email    = email;
-      if(date)     { e.date = date; if(e.type==='purchase') e.purchasedOn = date; }
-      if(price)    e.price = parseFloat(price);
-      if(site)     e.site = site;
-      if(notes)    e.notes = e.notes ? e.notes + ' | ' + notes : notes;
-      changed++;
-    });
-
-    saveEntries();
-    renderAll();
-    closeBulkEditModal();
-    _bulkSelected.clear();
-    updateBulkBar();
-    showToast('Updated '+changed+' entries ✓');
+  document.addEventListener('keydown', function(ev){
+    if(!document.getElementById('sheetOverlay').classList.contains('open')) return;
+    if((ev.metaKey || ev.ctrlKey) && (ev.key === 'z' || ev.key === 'Z')){ ev.preventDefault(); sheetUndo(); }
+    if(ev.key === 'Escape'){ closeSheet(false); }
   });
 
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
@@ -6606,7 +6772,6 @@
     wireSortableHeaders(wrap, renderSalesTable);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.sales = renderSalesTable;
-    injectBulkCheckboxes(wrap);
 
     // Pagination controls
     var prev = document.getElementById('salesPrevBtn');
