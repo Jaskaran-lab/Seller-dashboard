@@ -999,7 +999,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.32</span>
+    <span class="version-pill">v0.33</span>
   </div>
 </div>
 
@@ -4807,6 +4807,10 @@
         var statusPill = '<div class="order-status-pill" data-order-id="'+escapeAttr(e.id)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(st)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr data-bulk-id="'+escapeAttr(e.id)+'">' +
+          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'"><span style="font-weight:500;">'+escapeHtml(e.item)+'</span></td>' +
+          '<td>'+statusPill+'</td>' +
+          '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.purchasedOn||e.date)+'</td>' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(e.price)+'</td>' +
           '<td class="right" style="font-weight:600;">'+fmtMoney((e.qty||1)*e.price)+'</td>' +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(prefs.unrealisedProfit ? fmtUnrealised(unrealisedProfitForEntry(e)) : escapeHtml(String(e.orderNumber||'—')))+'</td>' +
@@ -6021,6 +6025,8 @@
         var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr data-bulk-id="'+escapeAttr(r.item)+'">' +
+          '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
           '<td class="right" style="font-weight:600;color:'+(daysHeld===null?'var(--text-muted)':daysHeld<=30?'var(--green)':daysHeld<=60?'var(--amber)':'var(--red)')+';">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
