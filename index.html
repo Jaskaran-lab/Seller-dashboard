@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.36</span>
+    <span class="version-pill">v0.37</span>
   </div>
 </div>
 
@@ -4447,7 +4447,7 @@
     var rPrice = Math.round((r.price||0) * 100);
     return entries.find(function(e){
       return e.type === r.type &&
-        e.item.trim().toLowerCase() === r.item.trim().toLowerCase() &&
+        String(e.item||'').trim().toLowerCase() === String(r.item||'').trim().toLowerCase() &&
         e.date === rDate &&
         Math.round((e.price||0) * 100) === rPrice;
     });
@@ -4469,12 +4469,13 @@
 
   function buildEntryObject(r){
     return {
-      id: uid(), item: r.item.trim(), qty: r.qty, price: r.price, type: r.type,
+      id: uid(), item: String(r.item||'').trim(), qty: r.qty, price: r.price, type: r.type,
       date: r.date || todayISO(), category: r.category || '', site: r.site || '',
       brand: r.brand || '',
       purchasedOn: r.purchasedOn || r.date || todayISO(),
       orderNumber: r.orderNumber || '', postage: typeof r.postage === 'number' ? r.postage : 0,
       matchedItem: r.matchedItem || null,
+      extraLinkedItems: (Array.isArray(r.extraLinkedItems) && r.extraLinkedItems.length) ? r.extraLinkedItems : undefined,
       status: r.status || (r.type === 'purchase' ? 'Received' : ''),
       email: r.email || '', cardUsed: r.cardUsed || '', notes: r.notes || '',
       platform: r.platform || (r.type === 'sale' ? 'Other' : ''),
@@ -4588,18 +4589,31 @@
   // Delegated click handling — headers are rebuilt every render, so binding
   // once per wrap (rather than per <th>) avoids rebinding drift.
   function wireSortableHeaders(wrapEl, rerenderFn){
-    wrapEl.addEventListener('click', function(e){
-      var th = e.target.closest('th.sortable');
-      if(!th || !wrapEl.contains(th)) return;
-      var tableKey = th.getAttribute('data-sort-table');
-      var key = th.getAttribute('data-sort-key');
-      var state = tableSortState[tableKey] || { key: null, dir: 1 };
-      if(state.key === key) state.dir = state.dir * -1;
-      else { state.key = key; state.dir = 1; }
-      tableSortState[tableKey] = state;
-      saveUIState();
-      rerenderFn();
-    });
+    // wrapEl is the same persistent container across every re-render (only
+    // its innerHTML is replaced), but this function used to run again on
+    // every single render — pagination, sorting, searching, all of it — and
+    // each call added ANOTHER click listener on top of the old ones, since
+    // addEventListener doesn't know to replace a previous one. After enough
+    // renders in a session, one click on a sort header fired the toggle-and-
+    // rerender logic that many times over, which could visibly misbehave.
+    // Bind the delegated listener once per wrapEl, and just keep the "current
+    // render's" rerender function up to date via a property on the element.
+    wrapEl._sortRerender = rerenderFn;
+    if(!wrapEl._sortableWired){
+      wrapEl._sortableWired = true;
+      wrapEl.addEventListener('click', function(e){
+        var th = e.target.closest('th.sortable');
+        if(!th || !wrapEl.contains(th)) return;
+        var tableKey = th.getAttribute('data-sort-table');
+        var key = th.getAttribute('data-sort-key');
+        var state = tableSortState[tableKey] || { key: null, dir: 1 };
+        if(state.key === key) state.dir = state.dir * -1;
+        else { state.key = key; state.dir = 1; }
+        tableSortState[tableKey] = state;
+        saveUIState();
+        if(wrapEl._sortRerender) wrapEl._sortRerender();
+      });
+    }
     // Wire column settings popover for any table in this wrap
     var colBtn = wrapEl.querySelector('[data-col-settings]');
     if(colBtn){
@@ -4887,6 +4901,48 @@
     return e.status || (e.type === 'purchase' ? 'Received' : '');
   }
 
+  // ---------- Cost-basis helpers (postage + multi-item/bundle sales) ----------
+  // A purchase's true cost includes whatever postage was paid to get it —
+  // not just the item price. purchaseCost() is that entry's own total spend;
+  // purchaseUnitCost() spreads its postage evenly across the qty bought, for
+  // attributing cost to however many of those units a given sale accounts for.
+  function purchaseCost(p){
+    return (p.qty||1) * (p.price||0) + (p.postage||0);
+  }
+  function purchaseUnitCost(p){
+    return (p.price||0) + (p.postage||0) / (p.qty||1);
+  }
+
+  // A sale normally draws stock from one item (matchedItem/qty). A "bundle"
+  // sale — one sale that used up stock from two or more different items —
+  // also carries extraLinkedItems: [{item, qty}, ...]. This is the single
+  // place that expands either shape into the full list of {item, qty} lines
+  // an entry actually consumes, so stock counts, profit and ROI all agree.
+  function saleLineItems(e){
+    var lines = [];
+    if(e.matchedItem) lines.push({ item: e.matchedItem, qty: e.qty || 1 });
+    (e.extraLinkedItems||[]).forEach(function(x){
+      if(x && x.item) lines.push({ item: x.item, qty: x.qty || 1 });
+    });
+    return lines;
+  }
+
+  // Total cost basis for a sale across every linked item (bundle-aware).
+  // Returns null — never 0 — when nothing is linked, or when any linked
+  // line can't be matched to a purchase, so an incomplete bundle link never
+  // silently understates cost the way a 0 would.
+  function costBasisForSale(saleEntry){
+    var lines = saleLineItems(saleEntry);
+    if(!lines.length) return null;
+    var cost = 0, allLinked = true;
+    lines.forEach(function(ln){
+      var p = entries.find(function(e){ return e.type === 'purchase' && e.item === ln.item; });
+      if(!p){ allLinked = false; return; }
+      cost += purchaseUnitCost(p) * (ln.qty || 1);
+    });
+    return allLinked ? cost : null;
+  }
+
   function daysHeldFor(dateBoughtIso){
     if(!dateBoughtIso) return null;
     // Handle both 'YYYY-MM-DD' and full ISO timestamps like '2026-05-11T23:00:00.000Z'
@@ -4929,9 +4985,15 @@
   // honest answer rather than silently treating cost as zero.
   function netProfitForSale(saleEntry){
     var match = resolveMatchedEntry(saleEntry.matchedItem);
-    if(!match) return null;
-    var costSide = saleEntry.qty * match.price;
-    return saleRevenue(saleEntry) - costSide;
+    if(match && match.type === 'ticket'){
+      // Ticket batches aren't part of the bundle/postage cost-basis system —
+      // they keep their existing single-line cost calculation.
+      var costSide = saleEntry.qty * (match.price||0);
+      return saleRevenue(saleEntry) - costSide;
+    }
+    var cost = costBasisForSale(saleEntry);
+    if(cost === null) return null;
+    return saleRevenue(saleEntry) - cost;
   }
 
   // Sums qty across every sale linked to this ticket batch by name — each
@@ -4950,7 +5012,20 @@
   var _ordersPage = 1;
   // _ordersPageSize is initialized earlier (before loadUIState) so persistence works.
 
+  // Wrapper: if anything below throws (bad/legacy data in one row, etc.) we
+  // used to leave the table stuck on its previous (or blank) content until a
+  // full page reload — this catches that instead, logs the real error to the
+  // console for diagnosis, and shows a recoverable message rather than a
+  // silently stale view.
   function renderOrdersTable(){
+    try { renderOrdersTableImpl(); }
+    catch(err){
+      console.error('Orders table failed to render — please share this error if it recurs:', err);
+      var wrap = document.getElementById('ordersTableWrap');
+      if(wrap) wrap.innerHTML = '<div class="empty-state" style="padding:40px;color:var(--red);">Couldn\'t render the Orders table (' + escapeHtml(err.message||String(err)) + '). Check the browser console for details, or reload the page.</div>';
+    }
+  }
+  function renderOrdersTableImpl(){
     var ordersTab = document.getElementById('page-orders');
     if(!ordersTab) return;
 
@@ -4975,7 +5050,7 @@
       orderNumber: function(a,b){ return compareText(String(a.orderNumber||''),String(b.orderNumber||'')); },
       qty:         function(a,b){ return compareNumber(a.qty,b.qty); },
       price:       function(a,b){ return compareNumber(a.price,b.price); },
-      total:       function(a,b){ return compareNumber(a.qty*a.price,b.qty*b.price); },
+      total:       function(a,b){ return compareNumber(purchaseCost(a),purchaseCost(b)); },
       site:        function(a,b){ return compareText(a.site,b.site); },
       date:        function(a,b){ return compareText(a.purchasedOn,b.purchasedOn); },
       status:      function(a,b){ return compareText(effectiveStatus(a),effectiveStatus(b)); }
@@ -4984,8 +5059,16 @@
       purchases = purchases.slice().sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); });
     }
 
-    // Totals
-    var totalSpend = allPurchases.reduce(function(s,e){ return s+(e.qty||1)*(e.price||0); }, 0);
+    // Totals — the spend figure always tracks whichever tab (All/Pending/
+    // Cancelled/Returned) and search are currently active, via `purchases`.
+    // Cancelled orders are refunded and have no real bearing on business
+    // costs, so they're excluded from the All tab's total specifically (the
+    // Cancelled tab itself still totals them — you can still see what was
+    // cancelled, just not have it inflate the overall spend figure).
+    var spendBasis = ordersStatusFilter === 'all'
+      ? purchases.filter(function(e){ return effectiveStatus(e) !== 'Cancelled'; })
+      : purchases;
+    var totalSpend = spendBasis.reduce(function(s,e){ return s+purchaseCost(e); }, 0);
     var pendingCount = allPurchases.filter(function(e){ return effectiveStatus(e)==='Pending'; }).length;
     var cancelledCount = allPurchases.filter(function(e){ return effectiveStatus(e)==='Cancelled'; }).length;
 
@@ -5036,7 +5119,7 @@
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.purchasedOn||e.date)+'</td>' +
           '<td class="right" style="font-weight:500;">'+fmtMoney(e.price)+'</td>' +
-          '<td class="right" style="font-weight:600;">'+fmtMoney((e.qty||1)*e.price)+'</td>' +
+          '<td class="right" style="font-weight:600;"'+(e.postage?' title="Includes '+escapeAttr(fmtMoneyPlain(e.postage))+' postage">':'>')+fmtMoney(purchaseCost(e))+'</td>' +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(prefs.unrealisedProfit ? fmtUnrealised(unrealisedProfitForEntry(e)) : escapeHtml(String(e.orderNumber||'—')))+'</td>' +
           '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.site||'—')+'</td>' +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.email||'—')+'</td>' +
@@ -5199,9 +5282,13 @@
     if(!prefs.unrealisedProfit) return null;
     if(!e.expectedSellPrice || e.expectedSellPrice <= 0) return null;
     var isSold = effectiveStatus(e) === 'Sold' ||
-      entries.some(function(s){ return s.type === 'sale' && s.matchedItem === e.item; });
+      entries.some(function(s){
+        if(s.type !== 'sale') return false;
+        if(s.matchedItem === e.item) return true;
+        return (s.extraLinkedItems||[]).some(function(ln){ return ln && ln.item === e.item; });
+      });
     if(isSold) return null; // real figures take over
-    var cost = (e.price || 0) * (e.qty || 1);
+    var cost = purchaseCost(e);
     var expected = e.expectedSellPrice * (e.qty || 1);
     return parseFloat((expected - cost).toFixed(2));
   }
@@ -5216,11 +5303,8 @@
   }
 
   function roiForSale(saleEntry) {
-    var linkedPurchase = entries.find(function(e){
-      return e.type === 'purchase' && e.item === saleEntry.matchedItem;
-    });
-    if(!linkedPurchase || !linkedPurchase.price) return null;
-    var cost = linkedPurchase.price * (saleEntry.qty || 1);
+    var cost = costBasisForSale(saleEntry);
+    if(cost === null || cost <= 0) return null;
     var revenue = saleRevenue(saleEntry);
     return parseFloat(((revenue - cost) / cost * 100).toFixed(1));
   }
@@ -5566,6 +5650,7 @@
         { key: 'item', label: 'Item', kind: 'text', placeholder: 'e.g. Bluetooth speaker', required: true },
         { key: 'qty', label: 'Qty', kind: 'number', placeholder: '1', default: '1' },
         { key: 'price', label: 'Buy price (each)', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'postage', label: 'Postage paid', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'currency', label: 'Currency', kind: 'select', options: ['GBP','USD','EUR','JPY','CAD','AUD','CHF','CNY'], default: 'GBP' },
         { key: 'expectedSellPrice', label: 'Expected sell price (optional)', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'site', label: 'Sourced from', kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
@@ -5681,6 +5766,73 @@
 
   var editingEntryId = null;
 
+  // ---------- Bundle sales (one sale drawing stock from 2+ items) ----------
+  // Holds the "extra" linked items being edited in the currently-open Sale
+  // modal, beyond the single matchedItem/qty pair the standard fields cover.
+  var _saleBundleRows = [];
+
+  function purchasedItemNames(){
+    var seen = {};
+    var names = [];
+    entries.forEach(function(e){
+      if(e.type !== 'purchase' || !e.item) return;
+      if(seen[e.item]) return;
+      seen[e.item] = true;
+      names.push(e.item);
+    });
+    return names.sort(function(a,b){ return a.localeCompare(b); });
+  }
+
+  function renderSaleBundleRows(){
+    var rowsEl = document.getElementById('saleBundleRows');
+    if(!rowsEl) return;
+    var names = purchasedItemNames();
+    rowsEl.innerHTML = _saleBundleRows.map(function(row, i){
+      var opts = '<option value="">— select item —</option>' + names.map(function(n){
+        return '<option value="'+escapeAttr(n)+'"'+(row.item===n?' selected':'')+'>'+escapeHtml(n)+'</option>';
+      }).join('');
+      return '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;" data-bundle-row="'+i+'">' +
+        '<div style="flex:1;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Item</label>' +
+        '<select data-bundle-item>'+opts+'</select></div>' +
+        '<div style="width:70px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Qty</label>' +
+        '<input type="number" data-bundle-qty min="1" step="1" value="'+escapeAttr(row.qty||1)+'"></div>' +
+        '<button type="button" class="btn btn-danger-ghost" data-bundle-remove style="padding:6px 10px;">✕</button>' +
+      '</div>';
+    }).join('');
+
+    rowsEl.querySelectorAll('[data-bundle-row]').forEach(function(rowEl){
+      var i = parseInt(rowEl.getAttribute('data-bundle-row'), 10);
+      var sel = rowEl.querySelector('[data-bundle-item]');
+      var qty = rowEl.querySelector('[data-bundle-qty]');
+      sel.addEventListener('change', function(){ _saleBundleRows[i].item = this.value; });
+      qty.addEventListener('input', function(){ _saleBundleRows[i].qty = parseFloat(this.value) || 1; });
+      rowEl.querySelector('[data-bundle-remove]').addEventListener('click', function(){
+        _saleBundleRows.splice(i, 1);
+        renderSaleBundleRows();
+      });
+    });
+  }
+
+  function wireSaleBundleUI(){
+    var toggle = document.getElementById('saleBundleToggle');
+    var rowsEl = document.getElementById('saleBundleRows');
+    var addBtn = document.getElementById('saleBundleAddRow');
+    if(!toggle) return;
+    toggle.addEventListener('change', function(){
+      var on = this.checked;
+      rowsEl.style.display = on ? 'flex' : 'none';
+      addBtn.style.display = on ? 'inline-block' : 'none';
+      if(on && !_saleBundleRows.length){
+        _saleBundleRows.push({ item: '', qty: 1 });
+        renderSaleBundleRows();
+      }
+    });
+    addBtn.addEventListener('click', function(){
+      _saleBundleRows.push({ item: '', qty: 1 });
+      renderSaleBundleRows();
+    });
+  }
+
   function openAddModal(configKey, existingEntry){
     activeModalConfig = MODAL_CONFIGS[configKey];
     if(!activeModalConfig) return;
@@ -5723,6 +5875,27 @@
       }
       return '<div class="modal-field"><label>'+escapeHtml(f.label)+(f.required?' *':'')+'</label>'+inputHtml+'</div>';
     }).join('');
+
+    // Sale modal only: let one sale draw stock from more than one item (a
+    // bundle/lot), on top of the standard single matchedItem/qty above.
+    if(configKey === 'sale'){
+      _saleBundleRows = (existingEntry && Array.isArray(existingEntry.extraLinkedItems))
+        ? existingEntry.extraLinkedItems.map(function(x){ return { item: x.item, qty: x.qty || 1 }; })
+        : [];
+      var hasBundle = _saleBundleRows.length > 0;
+      fieldsEl.insertAdjacentHTML('beforeend',
+        '<div class="modal-field" style="border-top:1px solid var(--border);padding-top:14px;margin-top:6px;">' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">' +
+            '<input type="checkbox" id="saleBundleToggle" style="width:auto;"'+(hasBundle?' checked':'')+'>' +
+            'This sale used stock from more than one item (e.g. a bundle or lot)' +
+          '</label>' +
+          '<div id="saleBundleRows" style="display:'+(hasBundle?'flex':'none')+';flex-direction:column;margin-top:10px;"></div>' +
+          '<button type="button" class="btn" id="saleBundleAddRow" style="display:'+(hasBundle?'inline-block':'none')+';font-size:12px;padding:5px 12px;">+ Add another item</button>' +
+        '</div>'
+      );
+      wireSaleBundleUI();
+      renderSaleBundleRows();
+    }
 
     wireModalComboboxes();
     wireModalDatePickers();
@@ -5923,6 +6096,7 @@
     if(modal._prevFocus) modal._prevFocus.focus();
     activeModalConfig = null;
     editingEntryId = null;
+    _saleBundleRows = [];
   }
 
   async function saveAddModal(){
@@ -6000,6 +6174,15 @@
       row.purchasedOn = parseDateSafe(values.purchasedOn);
     }
 
+    // Bundle sale: extra items (beyond the standard matchedItem/qty above)
+    // this same sale also drew stock from.
+    var bundleRows = null;
+    if(activeModalConfig === MODAL_CONFIGS.sale){
+      bundleRows = _saleBundleRows
+        .filter(function(r){ return r.item; })
+        .map(function(r){ return { item: r.item, qty: parseFloat(r.qty) || 1 }; });
+    }
+
     if(editingEntryId){
       var existing = entries.find(function(e){ return e.id === editingEntryId; });
       if(existing){
@@ -6007,11 +6190,19 @@
           if(row[k] !== undefined) existing[k] = row[k];
         });
         if(configKeys.purchasedOn && !values.purchasedOn) existing.purchasedOn = row.date;
+        // Handled separately from the loop above: an empty bundleRows still
+        // needs to CLEAR a previously-saved extraLinkedItems, which the
+        // undefined-skipping loop above can't do.
+        if(bundleRows !== null){
+          if(bundleRows.length) existing.extraLinkedItems = bundleRows;
+          else delete existing.extraLinkedItems;
+        }
         saveEntries();
         renderAll();
         showToast('Changes saved.');
       }
     } else {
+      if(bundleRows && bundleRows.length) row.extraLinkedItems = bundleRows;
       commitRows([row]);
       showToast('Added to '+(activeModalConfig.type === 'purchase' ? 'inventory' : 'sales')+'.');
     }
@@ -6158,6 +6349,14 @@
   }
 
   function renderInventoryPage(){
+    try { renderInventoryPageImpl(); }
+    catch(err){
+      console.error('Inventory table failed to render — please share this error if it recurs:', err);
+      var wrap = document.getElementById('invTableWrap');
+      if(wrap) wrap.innerHTML = '<div class="empty-state" style="padding:40px;color:var(--red);">Couldn\'t render the Inventory table (' + escapeHtml(err.message||String(err)) + '). Check the browser console for details, or reload the page.</div>';
+    }
+  }
+  function renderInventoryPageImpl(){
     var invTab = document.getElementById('page-inventory');
     if(!invTab) return;
 
@@ -6196,6 +6395,17 @@
         if(!row.dateBought || boughtOn < row.dateBought) row.dateBought = boughtOn;
         row.buyPrice = e.price;
       } else { row.soldQty += e.qty; }
+      // Bundle sales also draw stock from additional linked items beyond the
+      // primary matchedItem handled above — credit those against their own
+      // rows too, so a lot/bundle sale decrements every item it actually used.
+      if(e.type === 'sale' && Array.isArray(e.extraLinkedItems)){
+        e.extraLinkedItems.forEach(function(ln){
+          if(!ln || !ln.item) return;
+          var exKey = ln.item;
+          if(!byItem[exKey]) byItem[exKey] = { item: exKey, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '' };
+          byItem[exKey].soldQty += (ln.qty || 1);
+        });
+      }
     });
 
     var allRows = Object.values(byItem).filter(function(r){
@@ -6281,7 +6491,13 @@
         var daysHeld = daysHeldFor(r.dateBought);
         var itemId = getItemId(r.item);
         var sc = STATUS_COLORS[r.lastStatus] || { c:'var(--text-muted)', bg:'var(--surface-2)', dot:'#888' };
-        var linkedSaleQty = entries.filter(function(e){ return e.type==='sale' && e.matchedItem===r.item; }).reduce(function(s,e){ return s+e.qty; },0);
+        var linkedSaleQty = entries.reduce(function(s,e){
+          if(e.type !== 'sale') return s;
+          var q = 0;
+          if(e.matchedItem === r.item) q += (e.qty||1);
+          (e.extraLinkedItems||[]).forEach(function(ln){ if(ln && ln.item === r.item) q += (ln.qty||1); });
+          return s+q;
+        }, 0);
         var salesBadge = linkedSaleQty>0 ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green-dim)':'var(--amber-dim)')+';color:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green)':'var(--amber)')+';">'+(linkedSaleQty>=(r.received+r.listed)?'✓ Fully sold':linkedSaleQty+' sold')+'</span>' : '';
         var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
@@ -6607,6 +6823,9 @@
         if(saleDate > asOf) return; // exclude future sales
         var key2 = e.matchedItem || e.item;
         if(byItem[key2]) byItem[key2].qty -= (e.qty || 1);
+        (e.extraLinkedItems||[]).forEach(function(ln){
+          if(ln && ln.item && byItem[ln.item]) byItem[ln.item].qty -= (ln.qty || 1);
+        });
       }
     });
     return Object.values(byItem).filter(function(r){ return r.qty > 0; });
@@ -6816,12 +7035,13 @@
         { key:'brand',       label:'Brand',       type:'text' },
         { key:'email',       label:'Email',       type:'text' },
         { key:'price',       label:'Buy Price',   type:'number' },
+        { key:'postage',     label:'Postage',     type:'number' },
         { key:'qty',         label:'Qty',         type:'number' },
         { key:'orderNumber', label:'Order No',    type:'text' },
         { key:'cardUsed',    label:'Card Used',   type:'text' },
         { key:'notes',       label:'Notes',       type:'text' }
       ],
-      newRowDefaults: function(){ return { type:'purchase', item:'New item', status:'Received', date:todayISO(), purchasedOn:todayISO(), qty:1, price:0 }; }
+      newRowDefaults: function(){ return { type:'purchase', item:'New item', status:'Received', date:todayISO(), purchasedOn:todayISO(), qty:1, price:0, postage:0 }; }
     },
     sales: {
       title: 'Sales',
@@ -7188,6 +7408,14 @@
   // _salesPageSize is initialized earlier (before loadUIState) so persistence works.
 
   function renderSalesTable(){
+    try { renderSalesTableImpl(); }
+    catch(err){
+      console.error('Sales table failed to render — please share this error if it recurs:', err);
+      var wrap = document.getElementById('salesTableWrap');
+      if(wrap) wrap.innerHTML = '<div class="empty-state" style="padding:40px;color:var(--red);">Couldn\'t render the Sales table (' + escapeHtml(err.message||String(err)) + '). Check the browser console for details, or reload the page.</div>';
+    }
+  }
+  function renderSalesTableImpl(){
     var salesTab = document.getElementById('page-sales');
     if(!salesTab) return;
 
@@ -7251,6 +7479,9 @@
         var itemId = linkedMatch ? (linkedMatch.type==='ticket' ? getTicketId(linkedMatch.id) : getItemId(linkedMatch.item)) : getItemId(e.item);
         var netProfitCell = netProfit!==null ? '<span style="font-weight:600;color:'+(netProfit>=0?'var(--green)':'var(--red)')+';">'+fmtMoneySigned(netProfit)+'</span>' : '<span style="color:var(--text-muted);">—</span>';
         var linkedName = linkedMatch ? linkedMatch.item : (e.matchedItem||'');
+        var extraLinks = e.extraLinkedItems||[];
+        var linkedCellTitle = linkedName + (extraLinks.length ? ', ' + extraLinks.map(function(x){ return x.item+' x'+(x.qty||1); }).join(', ') : '');
+        var linkedCellHtml = escapeHtml(linkedName||'—') + (extraLinks.length ? ' <span style="color:var(--indigo);">+'+extraLinks.length+' more</span>' : '');
         var priceCell = fmtMoney(e.price);
         if(linkedMatch && linkedMatch.type==='ticket'){
           var each = e.qty>0 ? e.price/e.qty : e.price;
@@ -7271,7 +7502,7 @@
           '<td class="right" style="color:var(--text-muted);">'+fmtMoney(e.postage||0)+'</td>' +
           '<td class="right">'+netProfitCell+'</td>' +
           (prefs.unrealisedProfit ? '<td class="right">'+fmtROI(roiForSale(e))+'</td>' : '') +
-          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(linkedName)+'">'+escapeHtml(linkedName||'—')+'</td>' +
+          '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(linkedCellTitle)+'">'+linkedCellHtml+'</td>' +
           '<td style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(e.notes||'—')+'</td>' +
           '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-sale="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.item)+'">Del</button></td>' +
         '</tr>';
@@ -7549,7 +7780,9 @@
     var salesRevenue = sales.reduce(function(s,e){ return s+saleRevenue(e); }, 0);
     var cogs = sales.reduce(function(s,e){
       var match = resolveMatchedEntry(e.matchedItem);
-      return s + (match ? (match.price||0)*(e.qty||1) : 0);
+      if(match && match.type === 'ticket') return s + (match.price||0)*(e.qty||1);
+      var cost = costBasisForSale(e);
+      return s + (cost !== null ? cost : 0);
     }, 0);
     var grossProfit  = salesRevenue - cogs;
     var otherIncome  = income.reduce(function(s,e){ return s+(e.price||0)*(e.qty||1); }, 0);
