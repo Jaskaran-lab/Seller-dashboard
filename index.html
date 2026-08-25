@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.35</span>
+    <span class="version-pill">v0.36</span>
   </div>
 </div>
 
@@ -2300,7 +2300,7 @@
 
     // Apply search filter
     if(search) tracked = tracked.filter(function(t){
-      return t.label.toLowerCase().indexOf(search) !== -1 || t.num.toLowerCase().indexOf(search) !== -1;
+      return String(t.label||'').toLowerCase().indexOf(search) !== -1 || String(t.num||'').toLowerCase().indexOf(search) !== -1;
     });
 
     // Update badge
@@ -2330,7 +2330,7 @@
     var inTransit = 0, delivered = 0, received = 0;
     results.forEach(function(r){
       if(!r.status) return;
-      var s = (r.status.status || '').toLowerCase();
+      var s = String((r.status && r.status.status) || '').toLowerCase();
       if(s.includes('deliver')) delivered++;
       else if(s.includes('transit') || s.includes('progress') || s.includes('dispatch') || s.includes('sort') || s.includes('out for')) inTransit++;
       else if(s.includes('receiv') || s.includes('collect')) received++;
@@ -4964,7 +4964,7 @@
     var purchases = allPurchases.slice();
     if(ordersStatusFilter !== 'all') purchases = purchases.filter(function(e){ return effectiveStatus(e) === ordersStatusFilter; });
     if(search) purchases = purchases.filter(function(e){
-      return e.item.toLowerCase().indexOf(search) !== -1 ||
+      return String(e.item||'').toLowerCase().indexOf(search) !== -1 ||
              String(e.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
              String(e.site||'').toLowerCase().indexOf(search) !== -1 ||
              String(e.email||'').toLowerCase().indexOf(search) !== -1;
@@ -6168,7 +6168,7 @@
     if(_invCheckDate) {
       var ptSource = _activeSnapshot ? _activeSnapshot.rows : buildInventorySnapshot(_invCheckDate);
       var ptRows = ptSource.filter(function(r){
-        return !search || r.item.toLowerCase().indexOf(search) !== -1 || (r.site||'').toLowerCase().indexOf(search) !== -1;
+        return !search || String(r.item||'').toLowerCase().indexOf(search) !== -1 || String(r.site||'').toLowerCase().indexOf(search) !== -1;
       });
       renderInventoryFromRows(ptRows);
       return;
@@ -6202,9 +6202,10 @@
       if(r.lastStatus === 'Pending' || r.lastStatus === 'Cancelled' || r.lastStatus === 'Returned') return false;
       var inStock = r.received + r.listed - r.soldQty;
       if(inStock <= 0 && r.soldQty > 0) return false;
-      return !search || r.item.toLowerCase().indexOf(search) !== -1 ||
-             (r.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
-             (r.site||'').toLowerCase().indexOf(search) !== -1;
+      return !search || String(r.item||'').toLowerCase().indexOf(search) !== -1 ||
+             String(r.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
+             String(r.site||'').toLowerCase().indexOf(search) !== -1 ||
+             String(r.brand||'').toLowerCase().indexOf(search) !== -1;
     });
     if(statusFilter !== 'all') allRows = allRows.filter(function(r){ return r.lastStatus === statusFilter; });
     allRows = applySortState('inventory', allRows, {
@@ -7195,7 +7196,7 @@
 
     var sales = allSales.slice();
     if(salesPlatformFilter !== 'all') sales = sales.filter(function(e){ return (e.platform||'Other') === salesPlatformFilter; });
-    if(search) sales = sales.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
+    if(search) sales = sales.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1; });
 
     sales = applySortState('sales', sales, {
       item:      function(a,b){ return compareText(a.item,b.item); },
@@ -7376,7 +7377,7 @@
     if(preordersPayFilter === 'unpaid') preorders = preorders.filter(function(e){ return !e.paidStatus; });
 
     if(search){
-      preorders = preorders.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1 || (e.site||'').toLowerCase().indexOf(search) !== -1; });
+      preorders = preorders.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1 || String(e.site||'').toLowerCase().indexOf(search) !== -1; });
     }
 
     preorders = applySortState('preorders', preorders, {
@@ -7755,7 +7756,7 @@
       });
     }
     if(catFilter) expenses = expenses.filter(function(e){ return (e.category||'Uncategorised') === catFilter; });
-    if(search) expenses = expenses.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1 || (e.category||'').toLowerCase().indexOf(search) !== -1; });
+    if(search) expenses = expenses.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1 || String(e.category||'').toLowerCase().indexOf(search) !== -1; });
 
     expenses = applySortState('expenses', expenses, {
       item:     function(a,b){ return compareText(a.item,b.item); },
@@ -7955,7 +7956,7 @@
     var search = (document.getElementById('incomeSearch').value || '').toLowerCase();
     var income = entries.filter(function(e){ return e.type === 'income'; });
     if(search){
-      income = income.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1; });
+      income = income.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1; });
     }
     income = applySortState('income', income, {
       source: function(a,b){ return compareText(a.item,b.item); },
@@ -8026,7 +8027,7 @@
     var search = (searchEl.value || '').toLowerCase();
     var tickets = entries.filter(function(e){ return e.type === 'ticket'; });
     if(search){
-      tickets = tickets.filter(function(e){ return e.item.toLowerCase().indexOf(search) !== -1 || (e.venue||'').toLowerCase().indexOf(search) !== -1; });
+      tickets = tickets.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1 || String(e.venue||'').toLowerCase().indexOf(search) !== -1; });
     }
     tickets = applySortState('tickets', tickets, {
       item: function(a,b){ return compareText(a.item,b.item); },
@@ -9151,10 +9152,10 @@
     if(q.length < 2){ globalResultsEl.style.display='none'; return; }
 
     var results = entries.filter(function(e){
-      return (e.item||'').toLowerCase().indexOf(q) !== -1 ||
+      return String(e.item||'').toLowerCase().indexOf(q) !== -1 ||
              String(e.orderNumber||'').toLowerCase().indexOf(q) !== -1 ||
-             (e.site||'').toLowerCase().indexOf(q) !== -1 ||
-             (e.notes||'').toLowerCase().indexOf(q) !== -1;
+             String(e.site||'').toLowerCase().indexOf(q) !== -1 ||
+             String(e.notes||'').toLowerCase().indexOf(q) !== -1;
     }).slice(0, 8);
 
     if(!results.length){ globalResultsEl.style.display='none'; return; }
