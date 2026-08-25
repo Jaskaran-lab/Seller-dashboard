@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.38</span>
+    <span class="version-pill">v0.39</span>
   </div>
 </div>
 
@@ -5741,7 +5741,7 @@
         { key: 'qty', label: 'Qty sold', kind: 'number', placeholder: '1', default: '1' },
         { key: 'price', label: 'Sale price', kind: 'number', placeholder: 'Per unit, or total if linked to a ticket batch', step: '0.01' },
         { key: 'postage', label: 'Shipping cost (only if you paid it)', kind: 'number', placeholder: '0.00', step: '0.01' },
-        { key: 'matchedItem', label: 'Linked item', kind: 'combobox', placeholder: 'Search purchased items or ticket batches...', comboEmptyLabel: '— no linked item —',
+        { key: 'matchedItem', label: 'Linked item', kind: 'combobox', placeholder: 'Search purchased items or ticket batches...', comboEmptyLabel: '— no linked item —', comboStrict: true,
           resolveDisplay: function(val){ var m = resolveMatchedEntry(val); return m ? m.item : val; } },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
         { key: 'notes', label: 'Notes', kind: 'text', placeholder: '—' }
@@ -6075,6 +6075,16 @@
       var fieldDef = activeModalConfig.fields.find(function(f){ return f.key === key; });
       var source = fieldDef && fieldDef.comboSource ? fieldDef.comboSource : 'purchasedItems';
       var emptyLabel = fieldDef && fieldDef.comboEmptyLabel ? fieldDef.comboEmptyLabel : '— none —';
+      // Strict fields (currently: Sale -> Linked item) must resolve to a real
+      // entry — free-typed text that doesn't match anything looks plausible
+      // but silently fails to link (breaking cost-basis and stock counts),
+      // so it's rejected instead of accepted as-is.
+      var strict = !!(fieldDef && fieldDef.comboStrict);
+      function findExactMatch(typed){
+        var q = (typed||'').trim().toLowerCase();
+        if(!q) return null;
+        return sourceList().find(function(it){ return it.label.trim().toLowerCase() === q; }) || null;
+      }
 
       // Linkable items now span both purchased stock and ticket batches, since
       // a sale can correspond to either. Each entry carries its own venue (or
@@ -6118,7 +6128,7 @@
           var idTag = it.isTicket ? ' <span class="template-badge" style="margin-left:4px;">'+it.value+'</span>' : '';
           return '<div class="combo-option" data-combo-value="'+escapeAttr(it.value)+'" data-combo-label="'+escapeAttr(it.label)+'">'+escapeHtml(it.label)+sub+idTag+'</div>';
         }).join('');
-        else if(q) html += '<div class="combo-empty">No matches for "'+escapeHtml(query)+'" — typing your own value still works</div>';
+        else if(q) html += '<div class="combo-empty">'+(strict ? 'No matching item for "'+escapeHtml(query)+'"' : 'No matches for "'+escapeHtml(query)+'" — typing your own value still works')+'</div>';
         listEl.innerHTML = html;
         listEl.classList.add('open');
         listEl.querySelectorAll('.combo-option').forEach(function(opt){
@@ -6133,8 +6143,28 @@
       }
 
       inputEl.addEventListener('focus', function(){ this.select(); openList(''); });
-      inputEl.addEventListener('input', function(){ this.setAttribute('data-value', this.value); openList(this.value); });
-      inputEl.addEventListener('blur', function(){ setTimeout(function(){ listEl.classList.remove('open'); }, 150); });
+      inputEl.addEventListener('input', function(){
+        if(strict){
+          var m = findExactMatch(this.value);
+          this.setAttribute('data-value', m ? m.value : '');
+        } else {
+          this.setAttribute('data-value', this.value);
+        }
+        openList(this.value);
+      });
+      inputEl.addEventListener('blur', function(){
+        var self = this;
+        setTimeout(function(){
+          listEl.classList.remove('open');
+          if(strict && !self.getAttribute('data-value') && self.value){
+            // Whatever's typed didn't resolve to a real item (and wasn't
+            // picked from the list either) — clear it rather than leaving
+            // text on screen that looks linked but isn't.
+            showToast('No matching item for “'+self.value+'” — link cleared', true);
+            self.value = '';
+          }
+        }, 150);
+      });
     });
   }
 
@@ -6459,7 +6489,7 @@
     var allRows = Object.values(byItem).filter(function(r){
       if(r.lastStatus === 'Pending' || r.lastStatus === 'Cancelled' || r.lastStatus === 'Returned') return false;
       var inStock = r.received + r.listed - r.soldQty;
-      if(inStock <= 0 && r.soldQty > 0) return false;
+      if(inStock === 0 && r.soldQty > 0) return false;
       return !search || String(r.item||'').toLowerCase().indexOf(search) !== -1 ||
              String(r.orderNumber||'').toLowerCase().indexOf(search) !== -1 ||
              String(r.site||'').toLowerCase().indexOf(search) !== -1 ||
