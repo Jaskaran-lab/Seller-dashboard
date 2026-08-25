@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.37</span>
+    <span class="version-pill">v0.38</span>
   </div>
 </div>
 
@@ -4968,6 +4968,40 @@
     return entries.find(function(p){ return p.type === 'purchase' && p.item === matchedItem; }) || null;
   }
 
+  // True if any sale currently relies on this item name for its cost basis
+  // (costBasisForSale/resolveMatchedEntry match sales to purchases by item
+  // name, not by entry id). Converting the purchase entry this item name
+  // points to into an expense would orphan that lookup and silently break
+  // the linked sale's profit/ROI, so this gates convertPurchaseToExpense().
+  function itemHasLinkedSales(itemName){
+    return entries.some(function(e){
+      if(e.type !== 'sale') return false;
+      if(e.matchedItem === itemName) return true;
+      return (e.extraLinkedItems||[]).some(function(ln){ return ln && ln.item === itemName; });
+    });
+  }
+
+  // Converts a purchase entry (Order/Inventory/Pre-order) into a real
+  // expense entry, used by the "Expenses" status option so writing an item
+  // off (lost, damaged, personal use, etc.) actually shows on the Expenses
+  // page and counts as a deductible cost on the Tax P&L, instead of just
+  // vanishing from Orders/Inventory. Refuses (returns false, entry
+  // untouched) when itemHasLinkedSales() is true — see that function.
+  function convertPurchaseToExpense(entry){
+    if(!entry || entry.type !== 'purchase') return false;
+    if(itemHasLinkedSales(entry.item)) return false;
+    var cost = purchaseCost(entry);
+    var origDate = entry.purchasedOn || entry.date;
+    entry.type = 'expense';
+    entry.category = 'Stock write-off';
+    entry.price = cost;
+    entry.qty = 1;
+    entry.recurrence = 'One-off';
+    entry.date = todayISO();
+    entry.notes = (entry.notes ? entry.notes + ' — ' : '') + 'Written off from stock (originally purchased ' + fmtDateUK(origDate) + ', ' + fmtMoney(cost) + ')';
+    return true;
+  }
+
   // True revenue for a sale entry. For every type except ticket-linked sales,
   // price is genuinely per-unit, so qty*price is correct. A Viagogo line
   // amount is already the total received for however many tickets that line
@@ -5081,11 +5115,16 @@
     }
 
     var STATUS_COLORS = {
-      'Pending':   { c:'var(--amber)', bg:'var(--amber-dim)', dot:'#f0b35c' },
-      'Cancelled': { c:'var(--red)',   bg:'var(--red-dim)',   dot:'#f06d6d' },
-      'Returned':  { c:'var(--violet)',bg:'var(--violet-dim)',dot:'#b78cf2' }
+      'Pending':     { c:'var(--amber)', bg:'var(--amber-dim)', dot:'#f0b35c' },
+      'Received':    { c:'var(--indigo)',bg:'var(--indigo-dim)',dot:'#6d6df0' },
+      'Listed':      { c:'var(--violet)',bg:'var(--violet-dim)',dot:'#b78cf2' },
+      'Cancelled':   { c:'var(--red)',   bg:'var(--red-dim)',   dot:'#f06d6d' },
+      'Returned':    { c:'var(--violet)',bg:'var(--violet-dim)',dot:'#b78cf2' },
+      'Expenses':    { c:'var(--red)',   bg:'var(--red-dim)',   dot:'#f06d6d' },
+      'Pre-ordered': { c:'var(--indigo)',bg:'var(--indigo-dim)',dot:'#6d6df0' },
+      'Pre-sale':    { c:'var(--violet)',bg:'var(--violet-dim)',dot:'#b78cf2' }
     };
-    var statusOptions = ['Pending','Received','Listed','Cancelled','Returned','Pre-ordered','Pre-sale'];
+    var statusOptions = ['Pending','Received','Listed','Cancelled','Returned','Expenses','Pre-ordered','Pre-sale'];
 
     // Pagination
     var totalPages = Math.max(1, Math.ceil(purchases.length/_ordersPageSize));
@@ -5181,7 +5220,16 @@
           opt.addEventListener('click', function(){
             dd.remove();
             var entry = entries.find(function(en){ return en.id===entryId; });
-            if(entry){ entry.status=s; saveEntries(); renderAll(); showToast('Status → '+s); }
+            if(!entry) return;
+            if(s === 'Expenses'){
+              if(convertPurchaseToExpense(entry)){
+                saveEntries(); renderAll(); showToast('Moved to Expenses ('+fmtMoney(entry.price)+')');
+              } else {
+                showToast('Can\'t move to Expenses — this item has a linked sale', true);
+              }
+              return;
+            }
+            entry.status=s; saveEntries(); renderAll(); showToast('Status → '+s);
           });
           dd.appendChild(opt);
         });
@@ -5410,7 +5458,7 @@
   // ---------- Lists tile: view, edit, bulk-add ----------
   var activeListTab = 'retailers';
 
-  var EXPENSE_CATEGORIES = ['Packaging','Shipping supplies','Software','Subscriptions','Proxies','Travel','Fees','Stock supplies','Other'];
+  var EXPENSE_CATEGORIES = ['Packaging','Shipping supplies','Software','Subscriptions','Proxies','Travel','Fees','Stock supplies','Stock write-off','Other'];
 
   function renderListEditor(){
     var wrap = document.getElementById('listEditorWrap');
@@ -6468,9 +6516,12 @@
       'Listed':        { c:'var(--indigo)', bg:'var(--indigo-dim)', dot:'#6d6df0' },
       'Awaiting Return':{ c:'var(--amber)', bg:'var(--amber-dim)', dot:'#f0b35c' },
       'Returned':      { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' },
-      'Order Issue':   { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' }
+      'Order Issue':   { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' },
+      'Expenses':      { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' },
+      'Pre-ordered':   { c:'var(--indigo)', bg:'var(--indigo-dim)', dot:'#6d6df0' },
+      'Pre-sale':      { c:'var(--violet)', bg:'var(--violet-dim)', dot:'#b78cf2' }
     };
-    var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue','Pre-ordered','Pre-sale'];
+    var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue','Expenses','Pre-ordered','Pre-sale'];
 
     var headerRow = buildSortableHeader('inventory', [
       { label: 'ID',           width: '70px' },
@@ -6562,6 +6613,18 @@
           opt.onmouseout=function(){this.style.background='';};
           opt.addEventListener('click', function(){
             dd.remove();
+            if(s === 'Expenses'){
+              if(itemHasLinkedSales(itemName)){
+                showToast('Can\'t move to Expenses — this item has a linked sale', true);
+                return;
+              }
+              var totalCost = 0;
+              entries.forEach(function(en){ if(en.type==='purchase'&&en.item===itemName){ convertPurchaseToExpense(en); totalCost += en.price; } });
+              // renderAll (not just renderInventoryPage) — converting moves cost
+              // onto the Expenses/Tax pages too, so they can't be left stale.
+              saveEntries(); renderAll(); showToast('Moved to Expenses ('+fmtMoney(totalCost)+')');
+              return;
+            }
             entries.forEach(function(en){ if(en.type==='purchase'&&en.item===itemName) en.status=s; });
             saveEntries(); renderInventoryPage(); showToast('Status → '+s);
           });
@@ -6705,7 +6768,8 @@
   var GROUP_PANE_STATUS_DOT = {
     'Pending': '#f0b35c', 'Received': '#6d6df0', 'Listed': '#b78cf2',
     'Cancelled': '#f06d6d', 'Returned': '#f06d6d', 'Awaiting Return': '#f0b35c',
-    'Order Issue': '#f06d6d', 'Pre-ordered': '#6d6df0', 'Pre-sale': '#b78cf2'
+    'Order Issue': '#f06d6d', 'Pre-ordered': '#6d6df0', 'Pre-sale': '#b78cf2',
+    'Expenses': '#f06d6d'
   };
 
   function renderGroupPane(){
@@ -7736,7 +7800,7 @@
 
   // HMRC-aligned expense category buckets
   var TAX_BUCKETS = {
-    'Cost of goods sold': ['Stock supplies'],
+    'Cost of goods sold': ['Stock supplies','Stock write-off'],
     'Packaging & shipping': ['Packaging','Shipping supplies'],
     'Software & subscriptions': ['Software','Subscriptions','Proxies'],
     'Travel & mileage': ['Travel'],
