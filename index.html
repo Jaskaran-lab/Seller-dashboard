@@ -227,7 +227,32 @@
     top: 0;
     height: 100vh;
     overflow-y: auto;
+    transition: margin-left 0.18s ease;
   }
+  body.sidebar-hidden .sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
+  .sidebar-toggle-tab {
+    position: sticky;
+    top: 18px;
+    left: 0;
+    z-index: 60;
+    width: 20px;
+    height: 44px;
+    margin-left: -12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    align-self: flex-start;
+  }
+  .sidebar-toggle-tab:hover { color: var(--text-primary); background: var(--surface-2); }
+  @media (max-width: 980px) { .sidebar-toggle-tab { display: none; } }
   .brand {
     display: flex;
     align-items: center;
@@ -710,6 +735,48 @@
     .sheet-footer { padding: 12px 14px; }
   }
 
+  /* ── Group Detail Pane (Inventory Grouped view drill-down) ── */
+  .group-detail-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 400;
+    opacity: 0; pointer-events: none; transition: opacity 0.18s ease;
+  }
+  .group-detail-backdrop.open { opacity: 1; pointer-events: auto; }
+  .group-detail-pane {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 92vw;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 401; transform: translateX(100%); transition: transform 0.2s ease;
+    display: flex; flex-direction: column; box-shadow: -8px 0 32px rgba(0,0,0,0.35);
+  }
+  .group-detail-pane.open { transform: translateX(0); }
+  .group-detail-header {
+    display: flex; align-items: center; gap: 10px; padding: 16px 18px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .group-detail-back, .group-detail-close {
+    background: none; border: none; color: var(--text-secondary); cursor: pointer;
+    font-size: 15px; width: 32px; height: 32px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .group-detail-back:hover, .group-detail-close:hover { background: var(--surface-2); color: var(--text-primary); }
+  .group-detail-body { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .group-detail-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 18px; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .group-detail-row:hover { background: var(--surface-2); }
+  .group-detail-row .gdr-main { min-width: 0; }
+  .group-detail-row .gdr-title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-detail-row .gdr-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .group-detail-row .gdr-right { text-align: right; flex-shrink: 0; }
+  .group-detail-row .gdr-cost { font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .group-detail-row .gdr-actions { display: flex; gap: 4px; margin-top: 6px; }
+  .group-detail-row .gdr-actions button {
+    background: none; border: 1px solid var(--border); color: var(--text-secondary);
+    padding: 3px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  }
+  .group-detail-row .gdr-actions button:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  @media (max-width: 600px) { .group-detail-pane { width: 100%; max-width: 100%; } }
+
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.6); display: none;
@@ -840,6 +907,20 @@
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Split-screen / narrow desktop windows (e.g. two windows side by side on
+     a laptop) land in the gap between the mobile breakpoint (600px) and the
+     sidebar-collapse breakpoint (980px). Tables use table-layout:fixed with
+     width:100%, so in that gap every column — including the Edit/Del action
+     column — gets proportionally crushed down to nothing instead of
+     scrolling, which is what made the action buttons unusable/invisible.
+     This reuses the same horizontal-scroll pattern already proven to work
+     at mobile widths, just at a wider breakpoint so it also covers
+     split-screen use on a normal-sized laptop or monitor. */
+  @media (max-width: 1100px) {
+    .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-scroll-wrap table { min-width: 900px; }
+  }
 
   @media (max-width: 980px) {
     body { flex-direction: column; }
@@ -999,9 +1080,11 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.34</span>
+    <span class="version-pill">v0.35</span>
   </div>
 </div>
+
+<div class="sidebar-toggle-tab" id="sidebarToggleTab" title="Hide/show sidebar" role="button" aria-label="Toggle sidebar">‹</div>
 
 <div class="workspace" id="main-content" role="main" aria-label="Dashboard content">
 
@@ -1221,6 +1304,7 @@
       <div class="header-right">
         <input type="text" id="ordersSearch" placeholder="Search orders..." style="max-width:220px;">
         <button class="btn btn-sheet-trigger" id="bulkEditOrdersBtn">⊞ Bulk Edit</button>
+        <button class="btn" id="addExpenseFromOrdersBtn">+ Expense</button>
         <button class="btn btn-primary" id="addOrderBtn">+ Add</button>
       </div>
     </div>
@@ -2013,6 +2097,20 @@
     </div>
   </div>
 
+  <!-- GROUP DETAIL PANE — opened by clicking a card in the Inventory Grouped view -->
+  <div class="group-detail-backdrop" id="groupDetailBackdrop"></div>
+  <div class="group-detail-pane" id="groupDetailPane" role="dialog" aria-modal="true" aria-labelledby="groupDetailTitle">
+    <div class="group-detail-header">
+      <button class="group-detail-back" id="groupDetailBack" style="display:none;" title="Back">←</button>
+      <div style="min-width:0;flex:1;">
+        <h3 id="groupDetailTitle" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></h3>
+        <span id="groupDetailSub" style="font-size:12px;color:var(--text-muted);"></span>
+      </div>
+      <button class="group-detail-close" id="groupDetailClose" aria-label="Close">✕</button>
+    </div>
+    <div class="group-detail-body" id="groupDetailBody"></div>
+  </div>
+
   <div class="modal-overlay" id="addEntryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-box">
       <div class="modal-box-head">
@@ -2095,6 +2193,7 @@
       if(s.invView)            _invView            = s.invView;
       if(s.invGroupBy)         _invGroupBy         = s.invGroupBy;
       if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
+      if(typeof s.sidebarHidden === 'boolean') _sidebarHidden = s.sidebarHidden;
     } catch(e) { console.warn('Could not load UI state:', e); }
   }
 
@@ -2112,9 +2211,64 @@
         invStatusFilter:    invStatusFilter,
         invView:            _invView,
         invGroupBy:         _invGroupBy,
-        salesPlatformFilter:salesPlatformFilter
+        salesPlatformFilter:salesPlatformFilter,
+        sidebarHidden:      _sidebarHidden
       }));
     } catch(e) {}
+  }
+
+  // Best-effort UK carrier detection from tracking number format. There's no
+  // tracking API call here (by design — see comment below), so this is
+  // pattern-matching only; generic numeric formats can overlap between
+  // carriers and won't always be right, but a reasonable guess beats the
+  // page crashing outright (this function was called but never defined,
+  // which broke the Tracking page on every single render).
+  function detectCarrier(num){
+    if(!num) return { carrier: 'Unknown', color: '#888' };
+    var n = String(num).trim().toUpperCase().replace(/\s+/g, '');
+    if(/^1Z[0-9A-Z]{16}$/.test(n))        return { carrier: 'UPS',              color: '#8a6d3b' };
+    if(/^TBA[0-9A-Z]{9,}$/.test(n))       return { carrier: 'Amazon Logistics', color: '#f0a500' };
+    if(/^[A-Z]{2}\d{9}GB$/.test(n))       return { carrier: 'Royal Mail',       color: '#e4002b' };
+    if(/^JJD\d{10,}$/.test(n))            return { carrier: 'DHL',              color: '#ffcc00' };
+    if(/^\d{14,15}$/.test(n))             return { carrier: 'DPD',              color: '#dc0032' };
+    if(/^\d{16}$/.test(n))                return { carrier: 'Evri',             color: '#6d2077' };
+    if(/^\d{12}$/.test(n))                return { carrier: 'FedEx',            color: '#4d148c' };
+    if(/^\d{9,13}$/.test(n))              return { carrier: 'Yodel',            color: '#5c2d91' };
+    return { carrier: 'Unknown', color: '#888' };
+  }
+
+  // Builds a public tracking URL per carrier. Like detectCarrier, this is
+  // referenced in three places but was never defined anywhere in the file.
+  // These are the carriers' standard public tracking URL formats; Amazon
+  // Logistics has no standalone public tracker (tracking only lives inside
+  // Amazon's own order page), so it deliberately returns no link rather
+  // than a guessed URL that won't work.
+  function getTrackingLink(num, carrierInfo){
+    if(!num || !carrierInfo) return null;
+    var n = encodeURIComponent(String(num).trim());
+    switch(carrierInfo.carrier){
+      case 'UPS':        return 'https://www.ups.com/track?tracknum=' + n;
+      case 'Royal Mail':  return 'https://www.royalmail.com/track-your-item#/tracking-results/' + n;
+      case 'DHL':         return 'https://www.dhl.com/gb-en/home/tracking.html?tracking-id=' + n;
+      case 'DPD':         return 'https://track.dpd.co.uk/parcels/' + n;
+      case 'Evri':        return 'https://www.evri.com/track/parcel/' + n + '/details';
+      case 'FedEx':       return 'https://www.fedex.com/fedextrack/?trknbr=' + n;
+      case 'Yodel':       return 'https://www.yodel.co.uk/tracking?reference=' + n;
+      default: return null;
+    }
+  }
+
+  var TRACKING_STATUS_COLORS = {
+    'Delivered':         { c: 'var(--green)',          bg: 'var(--green-dim)' },
+    'Out for Delivery':  { c: 'var(--indigo)',         bg: 'var(--indigo-dim)' },
+    'In Transit':        { c: 'var(--amber)',          bg: 'var(--amber-dim)' },
+    'Ordered':           { c: 'var(--text-secondary)', bg: 'var(--surface-2)' },
+    'Collection Failed': { c: 'var(--red)',             bg: 'var(--red-dim)' },
+    'Returned':          { c: 'var(--red)',             bg: 'var(--red-dim)' }
+  };
+  function statusBadgeHtml(status){
+    var sc = TRACKING_STATUS_COLORS[status] || { c: 'var(--text-muted)', bg: 'var(--surface-2)' };
+    return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:11px;font-weight:600;">'+escapeHtml(status)+'</span>';
   }
 
   function renderTrackingPage() {
@@ -2199,7 +2353,7 @@
       }).join('');
     } else if(_trackingView === 'list') {
       wrap.innerHTML = '<table style="width:100%;table-layout:fixed;"><thead><tr>' +
-        '<th style="width:200px;">Item</th><th style="width:140px;">Tracking #</th><th style="width:100px;">Carrier</th><th>Status</th><th style="width:100px;">Updated</th><th style="width:80px;"></th>' +
+        '<th style="width:200px;">Item</th><th style="width:140px;">Tracking #</th><th style="width:100px;">Carrier</th><th>Status</th><th style="width:100px;">Updated</th><th style="width:160px;"></th>' +
         '</tr></thead><tbody>' +
         results.map(function(r){
           var link = getTrackingLink(r.t.num, r.carrier);
@@ -2209,7 +2363,10 @@
             '<td><span style="color:'+(r.carrier?r.carrier.color:'#888')+';">'+escapeHtml(r.carrier?r.carrier.carrier:'Unknown')+'</span></td>' +
             '<td>'+(r.status ? statusBadgeHtml(r.status.status) : statusBadgeHtml('No data'))+'</td>' +
             '<td style="font-size:11px;color:var(--text-muted);">'+(r.status&&r.status.timestamp?r.status.timestamp.slice(0,10):'—')+'</td>' +
-            '<td>'+(link?'<a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none;">Track</a>':'')+'</td>' +
+            '<td style="white-space:nowrap;">'+
+              (link?'<a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none;">Track</a>':'')+
+              (r.t.entryId===null?' <button class="btn btn-danger-ghost" style="font-size:11px;padding:4px 8px;" data-remove-manual-tracking="'+escapeAttr(r.t.num)+'">Remove</button>':'')+
+            '</td>' +
           '</tr>';
         }).join('') +
         '</tbody></table>';
@@ -2220,13 +2377,10 @@
         '</div>';
     }
 
-    // Wire manual status dropdowns
-    wrap.querySelectorAll('.tracking-status-select').forEach(function(sel){
-      sel.addEventListener('change', function(){
-        saveTrackingStatus(this.getAttribute('data-tnum'), this.value);
-        renderTrackingPage();
-      });
-    });
+    // Manual status dropdown changes are handled by a delegated listener
+    // on document.body (added once, works for every render) rather than
+    // wiring per-element here, which would both leak duplicate listeners
+    // on every re-render and previously called a function that didn't exist.
   }
 
   function trackingRowHtml(r) {
@@ -2270,9 +2424,9 @@
           '</div>'
         : '') +
       (link?'<div style="margin-top:12px;display:flex;gap:8px;"><a href="'+escapeHtml(link)+'" target="_blank" class="btn" style="font-size:12px;padding:6px 14px;text-decoration:none;display:inline-block;">Track on '+escapeHtml(carrierName)+' →</a>' +
-        (r.t.entryId===null ? '<button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" onclick="(function(){_manualTrackingNumbers=_manualTrackingNumbers.filter(function(x){return x.num!==\''+escapeAttr(r.t.num)+'\';});saveManualTracking();renderTrackingPage();})()">Remove</button>' : '') +
+        (r.t.entryId===null ? '<button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" data-remove-manual-tracking="'+escapeAttr(r.t.num)+'">Remove</button>' : '') +
       '</div>' :
-        (r.t.entryId===null ? '<div style="margin-top:12px;"><button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" onclick="(function(){_manualTrackingNumbers=_manualTrackingNumbers.filter(function(x){return x.num!==\''+escapeAttr(r.t.num)+'\';});saveManualTracking();renderTrackingPage();})()">Remove</button></div>' : '')) +
+        (r.t.entryId===null ? '<div style="margin-top:12px;"><button class="btn btn-danger-ghost" style="font-size:12px;padding:6px 10px;" data-remove-manual-tracking="'+escapeAttr(r.t.num)+'">Remove</button></div>' : '')) +
     '</div>';
   }
 
@@ -4531,6 +4685,59 @@
     try { localStorage.setItem(COL_PREFS_KEY, JSON.stringify(colPrefs)); } catch(e){}
   }
   loadColPrefs();
+  loadManualTracking();
+  loadTrackingStatuses();
+
+  // These view/filter states are restored by loadUIState() below from
+  // localStorage. They must be declared with their defaults here, BEFORE
+  // loadUIState() runs — var declarations further down the file that also
+  // assign a default (e.g. `var _invView = 'table'`) execute at that later
+  // point in the script regardless of hoisting, which was silently
+  // clobbering whatever loadUIState() had just restored. That's why view
+  // toggles, status filters, and platform filters didn't actually persist
+  // across a reload despite the save/load machinery being in place.
+  var ordersStatusFilter = 'all';
+  var invStatusFilter = 'all';
+  var _invView = 'table';       // 'table' | 'grouped'
+  var _invGroupBy = 'item';     // 'item' | 'site' | 'brand'
+  var salesPlatformFilter = 'all';
+  var _expensesView = 'list';
+  var _expensesType = 'all';
+  var _sidebarHidden = false;
+  var _ordersPageSize = 25;
+  var _invPageSize = 25;
+  var _salesPageSize = 50;
+  var _trackingView = 'list';
+
+  // ---- Manual tracking numbers ----
+  // Referenced throughout the Tracking page but was never actually declared
+  // or persisted anywhere in the original file, so renderTrackingPage()
+  // threw "_manualTrackingNumbers is not defined" on every visit to the
+  // Tracking page.
+  var _manualTrackingNumbers = [];
+  var MANUAL_TRACKING_KEY = 'inventory:manualTracking';
+  function loadManualTracking(){
+    try { var r = localStorage.getItem(MANUAL_TRACKING_KEY); if(r) _manualTrackingNumbers = JSON.parse(r); } catch(e){}
+  }
+  function saveManualTracking(){
+    try { localStorage.setItem(MANUAL_TRACKING_KEY, JSON.stringify(_manualTrackingNumbers)); } catch(e){}
+  }
+
+  // Manually-set delivery status per tracking number (there's no live
+  // carrier API call here — see detectCarrier's comment — so status is set
+  // by hand via the dropdown on each tracking card). This was referenced in
+  // three places but never declared, and the dropdown that's meant to set it
+  // had no event listener at all, so the whole "set tracking status"
+  // feature silently did nothing.
+  var _trackingStatuses = {};
+  var TRACKING_STATUSES_KEY = 'inventory:trackingStatuses';
+  function loadTrackingStatuses(){
+    try { var r = localStorage.getItem(TRACKING_STATUSES_KEY); if(r) _trackingStatuses = JSON.parse(r); } catch(e){}
+  }
+  function saveTrackingStatuses(){
+    try { localStorage.setItem(TRACKING_STATUSES_KEY, JSON.stringify(_trackingStatuses)); } catch(e){}
+  }
+
   loadUIState();
 
   function applyColPrefs(tableKey){
@@ -4738,10 +4945,10 @@
   }
 
   // ---------- Orders tab ----------
-  var ordersStatusFilter = 'all';
+  // ordersStatusFilter is initialized earlier (before loadUIState) so persistence works.
 
   var _ordersPage = 1;
-  var _ordersPageSize = 25;
+  // _ordersPageSize is initialized earlier (before loadUIState) so persistence works.
 
   function renderOrdersTable(){
     var ordersTab = document.getElementById('page-orders');
@@ -5377,7 +5584,7 @@
         { key: 'item',        label: 'Item name',        kind: 'text',     placeholder: 'e.g. Bluetooth speaker', required: true },
         { key: 'qty',         label: 'Qty',              kind: 'number',   placeholder: '1', default: '1' },
         { key: 'price',       label: 'Cost (each)',       kind: 'number',   placeholder: '0.00', step: '0.01' },
-        { key: 'status',      label: 'Status',            kind: 'select',   options: ['Received','Listed','Pending','Cancelled','Awaiting Return','Returned'], default: 'Received' },
+        { key: 'status',      label: 'Status',            kind: 'select',   options: ['Received','Listed','Pending','Cancelled','Awaiting Return','Returned','Pre-ordered','Pre-sale'], default: 'Received' },
         { key: 'site',        label: 'Sourced from',      kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
         { key: 'brand',       label: 'Brand',             kind: 'text',     placeholder: 'e.g. LEGO, Nike (optional)' },
         { key: 'purchasedOn', label: 'Date purchased',    kind: 'date' },
@@ -5819,6 +6026,7 @@
   });
 
   document.getElementById('addOrderBtn').addEventListener('click', function(){ openAddModal('order'); });
+  document.getElementById('addExpenseFromOrdersBtn').addEventListener('click', function(){ openAddModal('expense'); });
 
   // Bulk Edit buttons — open the full-page sheet editor
   document.getElementById('bulkEditOrdersBtn').addEventListener('click', function(){ openSheet('orders'); });
@@ -5847,11 +6055,36 @@
       var num = document.getElementById('manualTrackingNum').value.trim();
       var label = document.getElementById('manualTrackingLabel').value.trim();
       if(!num){ showToast('Please enter a tracking number.', true); return; }
-      _manualTrackingNumbers.push({ num: num, label: label || num });
+      _manualTrackingNumbers.push({ num: num, label: label || num, entryId: null });
       saveManualTracking();
       document.getElementById('trackParcelModal').style.display = 'none';
       document.getElementById('manualTrackingNum').value = '';
       document.getElementById('manualTrackingLabel').value = '';
+      renderTrackingPage();
+    }
+  });
+
+  // The Remove button on manually-tracked parcels previously used an inline
+  // onclick="..." attribute — but the whole app is wrapped in a closure, and
+  // inline onclick handlers execute in the global scope, so they could never
+  // actually see _manualTrackingNumbers or saveManualTracking(). Delegated
+  // listener instead, consistent with how every other button in the app works.
+  document.body.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-remove-manual-tracking]');
+    if(!btn) return;
+    var num = btn.getAttribute('data-remove-manual-tracking');
+    _manualTrackingNumbers = _manualTrackingNumbers.filter(function(x){ return x.num !== num; });
+    saveManualTracking();
+    renderTrackingPage();
+  });
+
+  // The per-parcel status dropdown (.tracking-status-select) rendered with
+  // no listener at all previously — selecting a status silently did nothing.
+  document.body.addEventListener('change', function(e){
+    if(e.target.classList && e.target.classList.contains('tracking-status-select')){
+      var tnum = e.target.getAttribute('data-tnum');
+      _trackingStatuses[tnum] = e.target.value;
+      saveTrackingStatuses();
       renderTrackingPage();
     }
   });
@@ -5881,7 +6114,7 @@
 
   // ---------- Inventory tab ----------
   var _invPage = 1;
-  var _invPageSize = 25;
+  // _invPageSize is initialized earlier (before loadUIState) so persistence works.
 
   function renderInventoryFromRows(rows) {
     var wrap = document.getElementById('invTableWrap');
@@ -6026,7 +6259,7 @@
       'Returned':      { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' },
       'Order Issue':   { c:'var(--red)',    bg:'var(--red-dim)',    dot:'#f06d6d' }
     };
-    var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue'];
+    var statusOptions = ['Received','Listed','Awaiting Return','Returned','Order Issue','Pre-ordered','Pre-sale'];
 
     var headerRow = buildSortableHeader('inventory', [
       { label: 'ID',           width: '70px' },
@@ -6145,10 +6378,15 @@
   // Renders the Inventory "Grouped" view — cards grouped by Item, Retailer, or
   // Brand, each showing a total cost and item/received counts, expandable to
   // list the underlying items when grouping by Retailer or Brand.
+  var _lastGroupedRows = [];
+  var _lastGroupedDim = 'item';
+
   function renderInventoryGrouped(allRows, wrap){
     var dim = _invGroupBy; // 'item' | 'site' | 'brand'
     var groupLabel = dim === 'site' ? 'retailer' : dim === 'brand' ? 'brand' : 'item';
     var emptyLabel = dim === 'site' ? '(No retailer)' : '(No brand)';
+    _lastGroupedRows = allRows;
+    _lastGroupedDim = dim;
 
     function rowCost(r){ return (r.received + r.listed + r.soldQty) * (r.buyPrice || 0); }
 
@@ -6156,12 +6394,13 @@
     var groupCount;
 
     if(dim === 'item'){
-      // Already item-level — one card per row, no further aggregation or expand.
+      // Already item-level — one card per row. Clicking opens the raw
+      // purchase entries that make up this item's aggregated totals.
       var sorted = allRows.slice().sort(function(a,b){ return rowCost(b) - rowCost(a); });
       groupCount = sorted.length;
       groupsHtml = sorted.map(function(r){
         var inStock = r.received + r.listed - r.soldQty;
-        return '<div class="inv-group-card" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">' +
+        return '<div class="inv-group-card" data-open-item="'+escapeAttr(r.item)+'" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;">' +
           '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">' +
             '<div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'">'+escapeHtml(r.item)+'</div>' +
             '<div style="font-weight:700;font-size:13px;white-space:nowrap;">'+fmtMoney(rowCost(r))+'</div>' +
@@ -6185,28 +6424,16 @@
       });
       var groupList = Object.values(groups).sort(function(a,b){ return b.cost - a.cost; });
       groupCount = groupList.length;
-      groupsHtml = groupList.map(function(g, gi){
-        var gKey = groupLabel + ':' + g.name;
-        var expanded = _invExpandedGroups.has(gKey);
-        var itemsHtml = expanded ? g.rows.slice().sort(function(a,b){ return rowCost(b)-rowCost(a); }).map(function(r){
-          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:12px;">' +
-            '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'">'+escapeHtml(r.item)+'</span>' +
-            '<span style="color:var(--text-muted);white-space:nowrap;">'+(r.received+r.listed)+' · '+fmtMoney(rowCost(r))+'</span>' +
-          '</div>';
-        }).join('') : '';
-        return '<div class="inv-group-card" data-group-key="'+escapeAttr(gKey)+'" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">' +
-          '<div class="inv-group-toggle" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:pointer;">' +
-            '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
-              '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0;">'+(expanded?'⌄':'›')+'</span>' +
-              '<span style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(g.name)+'">'+escapeHtml(g.name)+'</span>' +
-            '</div>' +
+      groupsHtml = groupList.map(function(g){
+        return '<div class="inv-group-card" data-open-group="'+escapeAttr(g.name)+'" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">' +
+            '<div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(g.name)+'">'+escapeHtml(g.name)+'</div>' +
             '<div style="font-weight:700;font-size:13px;white-space:nowrap;">'+fmtMoney(g.cost)+'</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
             '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:var(--indigo-dim);color:var(--indigo);font-weight:600;">'+g.itemCount+' item'+(g.itemCount===1?'':'s')+'</span>' +
             '<span style="font-size:11px;color:var(--text-muted);">'+g.received+' Received</span>' +
           '</div>' +
-          itemsHtml +
         '</div>';
       }).join('');
     }
@@ -6218,15 +6445,128 @@
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:12px;">' + groupsHtml + '</div>';
 
-    wrap.querySelectorAll('.inv-group-toggle').forEach(function(el){
+    wrap.querySelectorAll('[data-open-item]').forEach(function(el){
       el.addEventListener('click', function(){
-        var key = this.closest('[data-group-key]').getAttribute('data-group-key');
-        if(_invExpandedGroups.has(key)) _invExpandedGroups.delete(key);
-        else _invExpandedGroups.add(key);
-        renderInventoryPage();
+        openGroupPane('entries', this.getAttribute('data-open-item'));
+      });
+    });
+    wrap.querySelectorAll('[data-open-group]').forEach(function(el){
+      el.addEventListener('click', function(){
+        openGroupPane('items', this.getAttribute('data-open-group'));
       });
     });
   }
+
+  // ---- Group Detail Pane ----
+  // A drill-down panel opened from the Inventory Grouped view. Two levels:
+  //  'items'   — the aggregated item rows belonging to a clicked Retailer/Brand
+  //  'entries' — the raw purchase entries behind a clicked item (or reached
+  //              by drilling further into one of the 'items' rows)
+  var _groupPaneStack = [];
+
+  function openGroupPane(level, key){
+    _groupPaneStack = [{ level: level, key: key }];
+    renderGroupPane();
+    document.getElementById('groupDetailPane').classList.add('open');
+    document.getElementById('groupDetailBackdrop').classList.add('open');
+  }
+  function pushGroupPane(level, key){
+    _groupPaneStack.push({ level: level, key: key });
+    renderGroupPane();
+  }
+  function popGroupPane(){
+    _groupPaneStack.pop();
+    if(!_groupPaneStack.length){ closeGroupPane(); return; }
+    renderGroupPane();
+  }
+  function closeGroupPane(){
+    document.getElementById('groupDetailPane').classList.remove('open');
+    document.getElementById('groupDetailBackdrop').classList.remove('open');
+    _groupPaneStack = [];
+  }
+
+  var GROUP_PANE_STATUS_DOT = {
+    'Pending': '#f0b35c', 'Received': '#6d6df0', 'Listed': '#b78cf2',
+    'Cancelled': '#f06d6d', 'Returned': '#f06d6d', 'Awaiting Return': '#f0b35c',
+    'Order Issue': '#f06d6d', 'Pre-ordered': '#6d6df0', 'Pre-sale': '#b78cf2'
+  };
+
+  function renderGroupPane(){
+    var top = _groupPaneStack[_groupPaneStack.length - 1];
+    document.getElementById('groupDetailBack').style.display = _groupPaneStack.length > 1 ? 'inline-flex' : 'none';
+    document.getElementById('groupDetailTitle').textContent = top.key;
+    var body = document.getElementById('groupDetailBody');
+
+    if(top.level === 'items'){
+      var dim = _lastGroupedDim;
+      var emptyLabel = dim === 'site' ? '(No retailer)' : '(No brand)';
+      var rowsInGroup = _lastGroupedRows.filter(function(r){ return ((r[dim]||'').trim() || emptyLabel) === top.key; });
+      rowsInGroup.sort(function(a,b){ return ((b.received+b.listed+b.soldQty)*(b.buyPrice||0)) - ((a.received+a.listed+a.soldQty)*(a.buyPrice||0)); });
+      document.getElementById('groupDetailSub').textContent = rowsInGroup.length + ' item' + (rowsInGroup.length===1?'':'s');
+      body.innerHTML = rowsInGroup.map(function(r){
+        var cost = (r.received + r.listed + r.soldQty) * (r.buyPrice || 0);
+        return '<div class="group-detail-row" data-item="'+escapeAttr(r.item)+'">' +
+          '<div class="gdr-main">' +
+            '<div class="gdr-title" title="'+escapeAttr(r.item)+'">'+escapeHtml(r.item)+'</div>' +
+            '<div class="gdr-sub">'+r.received+' received · '+r.listed+' listed'+(r.soldQty?' · '+r.soldQty+' sold':'')+'</div>' +
+          '</div>' +
+          '<div class="gdr-right"><div class="gdr-cost">'+fmtMoney(cost)+'</div></div>' +
+        '</div>';
+      }).join('') || '<div style="padding:24px 18px;color:var(--text-muted);font-size:13px;">No items in this group.</div>';
+
+      body.querySelectorAll('.group-detail-row').forEach(function(el){
+        el.addEventListener('click', function(){ pushGroupPane('entries', this.getAttribute('data-item')); });
+      });
+    } else {
+      var itemEntries = entries.filter(function(e){ return e.type === 'purchase' && e.item === top.key; });
+      itemEntries.sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); });
+      document.getElementById('groupDetailSub').textContent = itemEntries.length + ' entr' + (itemEntries.length===1?'y':'ies');
+      body.innerHTML = itemEntries.map(function(e){
+        var st = effectiveStatus(e);
+        var dot = GROUP_PANE_STATUS_DOT[st] || '#888';
+        return '<div class="group-detail-row" style="cursor:default;">' +
+          '<div class="gdr-main">' +
+            '<div class="gdr-title"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+dot+';margin-right:6px;"></span>'+escapeHtml(st)+'</div>' +
+            '<div class="gdr-sub">'+escapeHtml(e.site||'—')+' · '+fmtDateUK(e.purchasedOn||e.date)+(e.orderNumber?' · #'+escapeHtml(String(e.orderNumber)):'')+'</div>' +
+            '<div class="gdr-actions">' +
+              '<button data-pane-edit="'+e.id+'">Edit</button>' +
+              '<button data-pane-del="'+e.id+'" data-pane-del-label="'+escapeAttr(e.item)+'">Delete</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="gdr-right"><div class="gdr-cost">'+fmtMoney(e.price)+'</div><div class="gdr-sub">×'+e.qty+'</div></div>' +
+        '</div>';
+      }).join('') || '<div style="padding:24px 18px;color:var(--text-muted);font-size:13px;">No purchase entries found for this item.</div>';
+
+      body.querySelectorAll('[data-pane-edit]').forEach(function(btn){
+        btn.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          var entry = entries.find(function(e){ return e.id === btn.getAttribute('data-pane-edit'); });
+          if(entry) openAddModal('inventoryAdjust', entry);
+        });
+      });
+      body.querySelectorAll('[data-pane-del]').forEach(function(btn){
+        btn.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          var id = btn.getAttribute('data-pane-del');
+          var label = btn.getAttribute('data-pane-del-label');
+          showConfirmDialog('Delete this entry?', (label ? '"'+label+'" will be removed permanently.' : 'This entry will be removed permanently.'), function(){
+            entries = entries.filter(function(e){ return e.id !== id; });
+            saveEntries();
+            renderAll();
+            showToast('Deleted.');
+            if(document.getElementById('groupDetailPane').classList.contains('open')) renderGroupPane();
+          });
+        });
+      });
+    }
+  }
+
+  document.getElementById('groupDetailClose').addEventListener('click', closeGroupPane);
+  document.getElementById('groupDetailBackdrop').addEventListener('click', closeGroupPane);
+  document.getElementById('groupDetailBack').addEventListener('click', popGroupPane);
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape' && document.getElementById('groupDetailPane').classList.contains('open')) closeGroupPane();
+  });
 
     // ============================================================
   // INVENTORY SNAPSHOTS
@@ -6503,7 +6843,7 @@
       filter: function(e){ var st = effectiveStatus(e); return st==='Received' || st==='Listed' || st==='Awaiting Return'; },
       columns: [
         { key:'item',        label:'Product',     type:'text' },
-        { key:'status',      label:'Status',      type:'select', options:['Received','Listed','Awaiting Return','Returned','Order Issue'] },
+        { key:'status',      label:'Status',      type:'select', options:['Received','Listed','Awaiting Return','Returned','Order Issue','Pre-ordered','Pre-sale'] },
         { key:'purchasedOn', label:'Date Bought', type:'date' },
         { key:'qty',         label:'Qty',         type:'number' },
         { key:'price',       label:'Buy Price',   type:'number' },
@@ -6750,6 +7090,22 @@
     if(!document.getElementById('sheetOverlay').classList.contains('open')) return;
     if((ev.metaKey || ev.ctrlKey) && (ev.key === 'z' || ev.key === 'Z')){ ev.preventDefault(); sheetUndo(); }
     if(ev.key === 'Escape'){ closeSheet(false); }
+
+    // Delete/Backspace and Cmd/Ctrl+A only act on row selection — never
+    // while actually typing in a cell, or they'd eat normal text editing.
+    var typing = ev.target && /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName);
+    if(typing) return;
+
+    if((ev.key === 'Delete' || ev.key === 'Backspace') && _sheetSelected.size){
+      ev.preventDefault();
+      sheetDeleteSelected();
+    }
+    if((ev.metaKey || ev.ctrlKey) && ev.key === 'a'){
+      ev.preventDefault();
+      _sheetRows.forEach(function(r){ _sheetSelected.add(r.id); });
+      renderSheetTable();
+      updateSheetToolbarState();
+    }
   });
 
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
@@ -6763,9 +7119,7 @@
       document.querySelector('.inv-subtab-content[data-inv-subtab="'+key+'"]').classList.add('active');
     });
   });
-  var invStatusFilter = 'all';
-  var _invView = 'table';       // 'table' | 'grouped'
-  var _invGroupBy = 'item';     // 'item' | 'site' | 'brand'
+  // invStatusFilter, _invView, _invGroupBy are initialized earlier (before loadUIState) so persistence works.
   var _invExpandedGroups = new Set();
   document.querySelectorAll('#invStatusFilter .seg-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -6827,10 +7181,10 @@
   })();
 
   // ---------- Sales tab ----------
-  var salesPlatformFilter = 'all';
+  // salesPlatformFilter is initialized earlier (before loadUIState) so persistence works.
 
   var _salesPage = 1;
-  var _salesPageSize = 50;
+  // _salesPageSize is initialized earlier (before loadUIState) so persistence works.
 
   function renderSalesTable(){
     var salesTab = document.getElementById('page-sales');
@@ -7137,8 +7491,7 @@
   });
 
   // ---------- Expenses tab ----------
-  var _expensesType = 'all';
-  var _expensesView = 'list';
+  // _expensesType and _expensesView are initialized earlier (before loadUIState) so persistence works.
 
   // ============================================================
   // TAX & P&L PAGE
@@ -8789,8 +9142,6 @@
     renderOverviewActivity();
   });
 
-  document.getElementById('themeToggleBtn').addEventListener('click', function(){
-
   // ---- Global search ----
   var globalSearchEl = document.getElementById('globalSearch');
   var globalResultsEl = document.getElementById('globalSearchResults');
@@ -8844,10 +9195,28 @@
       globalResultsEl.style.display = 'none';
     }
   });
+
+  document.getElementById('themeToggleBtn').addEventListener('click', function(){
     prefs.lightMode = !prefs.lightMode;
     applyPrefs();
     savePrefs();
   });
+
+  // ---- Sidebar hide/show toggle ----
+  // _sidebarHidden is initialized earlier (before loadUIState) so persistence works.
+  var sidebarToggleTab = document.getElementById('sidebarToggleTab');
+  function applySidebarHidden(){
+    document.body.classList.toggle('sidebar-hidden', _sidebarHidden);
+    sidebarToggleTab.textContent = _sidebarHidden ? '›' : '‹';
+    sidebarToggleTab.title = _sidebarHidden ? 'Show sidebar' : 'Hide sidebar';
+  }
+  applySidebarHidden(); // reflect whatever loadUIState() restored
+  sidebarToggleTab.addEventListener('click', function(){
+    _sidebarHidden = !_sidebarHidden;
+    applySidebarHidden();
+    saveUIState();
+  });
+
   if(staticExpensesLink){
     staticExpensesLink.addEventListener('click', function(e){
       e.preventDefault();
