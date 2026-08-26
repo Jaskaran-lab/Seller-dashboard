@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.39</span>
+    <span class="version-pill">v0.40</span>
   </div>
 </div>
 
@@ -3206,13 +3206,16 @@
     var totalSales = sales.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
     var totalExpenses = expenses.reduce(function(s,e){ return s + e.qty * e.price; }, 0);
     var totalIncome = income.reduce(function(s,e){ return s + e.qty * e.price; }, 0);
+    // postageCollected doubles as "shipping paid out" here — totalSales
+    // (via saleRevenue()) now includes postage charged as revenue, so this
+    // same number is subtracted back out as a cost to keep profit accurate.
+    var postageCollected = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
     // True profit folds in overhead costs and non-inventory income, not just stock margin.
-    var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses);
+    var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses + postageCollected);
     var orders = purchases.length;
     var unitsSold = sales.reduce(function(s,e){ return s + e.qty; }, 0);
     var avgSale = sales.length ? totalSales / unitsSold : 0;
     var margin = totalSales > 0 ? (profit / totalSales) * 100 : 0;
-    var postageCollected = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
     return {
       totalSpend: totalSpend, totalSales: totalSales, profit: profit, orders: orders,
       unitsSold: unitsSold, avgSale: avgSale, margin: margin, postageCollected: postageCollected,
@@ -3702,7 +3705,7 @@
     var buyCost = purchases.reduce(function(s,e){ return s + e.qty*e.price; }, 0);
     var shipping = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
     var revenue = sales.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
-    var grossMargin = revenue > 0 ? ((revenue - buyCost) / revenue) * 100 : 0;
+    var grossMargin = revenue > 0 ? ((revenue - buyCost - shipping) / revenue) * 100 : 0;
 
     document.getElementById('analyticsCostStatRow').innerHTML = [
       { label: 'Gross margin', value: revenue > 0 ? grossMargin.toFixed(1)+'%' : '—', sub: 'before fees', color: 'var(--green)', bg: 'var(--green-dim)' },
@@ -4083,7 +4086,7 @@
         byItem[key].revenue += saleRevenue(e);
         var match = resolveMatchedEntry(e.matchedItem);
         var cost = match ? (match.price||0)*(e.qty||1) : 0;
-        byItem[key].profit  += saleRevenue(e) - cost;
+        byItem[key].profit  += saleRevenue(e) - cost - (e.postage||0);
       }
     });
 
@@ -5011,8 +5014,14 @@
   function saleRevenue(e){
     if(e.type !== 'sale') return e.qty * e.price;
     var match = resolveMatchedEntry(e.matchedItem);
-    if(match && match.type === 'ticket') return e.price;
-    return e.qty * e.price;
+    // Postage charged to the buyer is real revenue you received — folded in
+    // here so it flows through every revenue figure in the app consistently.
+    // This assumes what you charged for shipping equals what you paid for
+    // it (true for most sales) — netProfitForSale() subtracts the same
+    // e.postage number back out as a cost, so the common case nets to zero
+    // extra profit while Total Sales correctly reflects the full payout.
+    if(match && match.type === 'ticket') return e.price + (e.postage||0);
+    return e.qty * e.price + (e.postage||0);
   }
 
   // an unlinked sale has no known cost basis, so "no profit figure" is the
@@ -5021,13 +5030,15 @@
     var match = resolveMatchedEntry(saleEntry.matchedItem);
     if(match && match.type === 'ticket'){
       // Ticket batches aren't part of the bundle/postage cost-basis system —
-      // they keep their existing single-line cost calculation.
-      var costSide = saleEntry.qty * (match.price||0);
+      // they keep their existing single-line cost calculation. Postage is
+      // subtracted here too (see saleRevenue()) so it nets to zero when what
+      // was charged for shipping matches what was actually paid for it.
+      var costSide = saleEntry.qty * (match.price||0) + (saleEntry.postage||0);
       return saleRevenue(saleEntry) - costSide;
     }
     var cost = costBasisForSale(saleEntry);
     if(cost === null) return null;
-    return saleRevenue(saleEntry) - cost;
+    return saleRevenue(saleEntry) - cost - (saleEntry.postage||0);
   }
 
   // Sums qty across every sale linked to this ticket batch by name — each
@@ -7878,7 +7889,12 @@
       var cost = costBasisForSale(e);
       return s + (cost !== null ? cost : 0);
     }, 0);
-    var grossProfit  = salesRevenue - cogs;
+    // Postage charged to buyers is now folded into salesRevenue (see
+    // saleRevenue()) — this line takes back out what was actually paid for
+    // shipping, as its own transparent P&L line rather than silently netted
+    // against COGS.
+    var shippingCost = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
+    var grossProfit  = salesRevenue - cogs - shippingCost;
     var otherIncome  = income.reduce(function(s,e){ return s+(e.price||0)*(e.qty||1); }, 0);
     var totalExpenses= expenses.reduce(function(s,e){ return s+(e.price||0)*(e.qty||1); }, 0);
 
@@ -7908,6 +7924,7 @@
       '</div>'+
       plRow('Sales revenue', salesRevenue) +
       plRow('Cost of goods sold', cogs, false, true) +
+      plRow('Shipping costs', shippingCost, false, true) +
       plRow('Gross profit', grossProfit, true, false, grossProfit>=0?'var(--green)':'var(--red)') +
       plRow('Other income', otherIncome, false, true) +
       plRow('Deductible expenses', totalExpenses, false, true) +
