@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.40</span>
+    <span class="version-pill">v0.41</span>
   </div>
 </div>
 
@@ -6468,9 +6468,10 @@
       var key = (e.type === 'sale' && e.matchedItem) ? e.matchedItem : e.item;
       var st = e.type === 'purchase' ? effectiveStatus(e) : null;
       if(st === 'Pre-ordered' || st === 'Pre-sale') return;
-      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '' };
+      if(!byItem[key]) byItem[key] = { item: key, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '', hasPurchase: false };
       var row = byItem[key];
       if(e.type === 'purchase'){
+        row.hasPurchase = true;
         if(st === 'Received') row.received += e.qty;
         else if(st === 'Listed') row.listed += e.qty;
         else if(st === 'Pending') row.pending += e.qty;
@@ -6491,7 +6492,7 @@
         e.extraLinkedItems.forEach(function(ln){
           if(!ln || !ln.item) return;
           var exKey = ln.item;
-          if(!byItem[exKey]) byItem[exKey] = { item: exKey, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '' };
+          if(!byItem[exKey]) byItem[exKey] = { item: exKey, received: 0, listed: 0, pending: 0, soldQty: 0, lastStatus: 'Received', email: '', cardUsed: '', site: '', brand: '', dateBought: null, buyPrice: 0, orderNumber: '', hasPurchase: false };
           byItem[exKey].soldQty += (ln.qty || 1);
         });
       }
@@ -6591,11 +6592,18 @@
           return s+q;
         }, 0);
         var salesBadge = linkedSaleQty>0 ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green-dim)':'var(--amber-dim)')+';color:'+(linkedSaleQty>=(r.received+r.listed)?'var(--green)':'var(--amber)')+';">'+(linkedSaleQty>=(r.received+r.listed)?'✓ Fully sold':linkedSaleQty+' sold')+'</span>' : '';
+        // A "ghost" row exists purely because an unlinked sale's own item text
+        // never matched a real purchase — no purchase ever contributed to it
+        // (hasPurchase stays false), so received/buyPrice are just defaults,
+        // not real stock data. Flag it clearly rather than let it look like a
+        // genuine £0 duplicate purchase — see the Inventory grouping loop above.
+        var isGhostRow = !r.hasPurchase && r.soldQty > 0;
+        var ghostBadge = isGhostRow ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--red-dim);color:var(--red);" title="No purchase matches this exact item name — this sale is unlinked, not a real duplicate purchase. Open the sale and set its Linked item.">⚠ Unlinked sale</span>' : '';
         var statusPill = '<div class="inv-status-pill" data-inv-item="'+escapeAttr(r.item)+'" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:'+sc.bg+';color:'+sc.c+';font-size:12px;font-weight:600;cursor:pointer;">' +
           '<span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';flex-shrink:0;"></span>'+escapeHtml(r.lastStatus)+'<span style="font-size:10px;opacity:0.7;">▾</span></div>';
         return '<tr data-bulk-id="'+escapeAttr(r.item)+'">' +
           '<td style="font-size:11px;">'+fmtItemId(itemId)+'</td>' +
-          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+'</td>' +
+          '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(r.item)+'"><span style="font-weight:500;">'+escapeHtml(r.item)+'</span>'+salesBadge+ghostBadge+'</td>' +
           '<td>'+statusPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+(r.dateBought?fmtDateUK(r.dateBought):'—')+'</td>' +
           '<td class="right" style="font-weight:600;color:'+(daysHeld===null?'var(--text-muted)':daysHeld<=30?'var(--green)':daysHeld<=60?'var(--amber)':'var(--red)')+';">'+(daysHeld!==null?daysHeld+'d':'—')+'</td>' +
