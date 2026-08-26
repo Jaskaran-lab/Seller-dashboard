@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.41</span>
+    <span class="version-pill">v0.42</span>
   </div>
 </div>
 
@@ -3206,12 +3206,17 @@
     var totalSales = sales.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
     var totalExpenses = expenses.reduce(function(s,e){ return s + e.qty * e.price; }, 0);
     var totalIncome = income.reduce(function(s,e){ return s + e.qty * e.price; }, 0);
-    // postageCollected doubles as "shipping paid out" here — totalSales
-    // (via saleRevenue()) now includes postage charged as revenue, so this
-    // same number is subtracted back out as a cost to keep profit accurate.
-    var postageCollected = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
+    // postageCollected = shipping charged to buyers (already folded into
+    // totalSales via saleRevenue()) — a genuine "how much shipping revenue
+    // came in" stat now that charged/paid are separate fields.
+    var postageCollected = sales.reduce(function(s,e){ return s + (e.postageCharged||0); }, 0);
+    // totalShippingPaid = what you actually spent on labels — the real cost
+    // side, independent of what was charged. Subtracted here so a
+    // free-shipping sale you paid for yourself correctly reduces profit
+    // instead of netting to zero like a buyer-funded one does.
+    var totalShippingPaid = sales.reduce(function(s,e){ return s + (e.postage||0); }, 0);
     // True profit folds in overhead costs and non-inventory income, not just stock margin.
-    var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses + postageCollected);
+    var profit = (totalSales + totalIncome) - (totalSpend + totalExpenses + totalShippingPaid);
     var orders = purchases.length;
     var unitsSold = sales.reduce(function(s,e){ return s + e.qty; }, 0);
     var avgSale = sales.length ? totalSales / unitsSold : 0;
@@ -5014,14 +5019,16 @@
   function saleRevenue(e){
     if(e.type !== 'sale') return e.qty * e.price;
     var match = resolveMatchedEntry(e.matchedItem);
-    // Postage charged to the buyer is real revenue you received — folded in
-    // here so it flows through every revenue figure in the app consistently.
-    // This assumes what you charged for shipping equals what you paid for
-    // it (true for most sales) — netProfitForSale() subtracts the same
-    // e.postage number back out as a cost, so the common case nets to zero
-    // extra profit while Total Sales correctly reflects the full payout.
-    if(match && match.type === 'ticket') return e.price + (e.postage||0);
-    return e.qty * e.price + (e.postage||0);
+    // Postage charged to the buyer (e.postageCharged) is real revenue you
+    // received — folded in here so it flows through every revenue figure in
+    // the app consistently. Kept separate from e.postage (what you actually
+    // paid for the label, see netProfitForSale()) since those two numbers
+    // aren't always equal — a free-shipping listing you paid for yourself
+    // has postageCharged=0 and postage>0; a buyer-funded label has both
+    // equal and nets to zero extra profit; nothing stops the two from being
+    // genuinely different either way.
+    if(match && match.type === 'ticket') return e.price + (e.postageCharged||0);
+    return e.qty * e.price + (e.postageCharged||0);
   }
 
   // an unlinked sale has no known cost basis, so "no profit figure" is the
@@ -5030,9 +5037,10 @@
     var match = resolveMatchedEntry(saleEntry.matchedItem);
     if(match && match.type === 'ticket'){
       // Ticket batches aren't part of the bundle/postage cost-basis system —
-      // they keep their existing single-line cost calculation. Postage is
-      // subtracted here too (see saleRevenue()) so it nets to zero when what
-      // was charged for shipping matches what was actually paid for it.
+      // they keep their existing single-line cost calculation. saleEntry.postage
+      // (what was actually paid) is subtracted here as the real cost side,
+      // independent of saleEntry.postageCharged (what was charged — see
+      // saleRevenue()) — the two can differ genuinely, not just as an edge case.
       var costSide = saleEntry.qty * (match.price||0) + (saleEntry.postage||0);
       return saleRevenue(saleEntry) - costSide;
     }
@@ -5751,7 +5759,8 @@
         { key: 'date', label: 'Sale date', kind: 'date' },
         { key: 'qty', label: 'Qty sold', kind: 'number', placeholder: '1', default: '1' },
         { key: 'price', label: 'Sale price', kind: 'number', placeholder: 'Per unit, or total if linked to a ticket batch', step: '0.01' },
-        { key: 'postage', label: 'Shipping cost (only if you paid it)', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'postageCharged', label: 'Shipping charged to buyer', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'postage', label: 'Shipping you paid', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'matchedItem', label: 'Linked item', kind: 'combobox', placeholder: 'Search purchased items or ticket batches...', comboEmptyLabel: '— no linked item —', comboStrict: true,
           resolveDisplay: function(val){ var m = resolveMatchedEntry(val); return m ? m.item : val; } },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
@@ -7600,6 +7609,15 @@
           var each = e.qty>0 ? e.price/e.qty : e.price;
           priceCell = fmtMoney(e.price)+'<div style="color:var(--text-muted);font-size:10px;">total · '+fmtMoney(each)+' each</div>';
         }
+        // Shipping cell shows what you PAID as the headline figure (the real
+        // cost, matching netProfitForSale()) with what was CHARGED to the
+        // buyer as a muted sub-line when it differs — so a free-shipping
+        // sale you covered yourself and a buyer-funded label both read
+        // clearly at a glance, without needing a second table column.
+        var shippingCell = fmtMoney(e.postage||0);
+        if((e.postageCharged||0) !== (e.postage||0)){
+          shippingCell += '<div style="color:var(--text-muted);font-size:10px;">charged '+fmtMoney(e.postageCharged||0)+'</div>';
+        }
         // Sold status pill
         var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
           '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
@@ -7612,7 +7630,7 @@
           '<td style="color:var(--text-secondary);font-size:12px;">'+escapeHtml(e.platform||'—')+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+fmtDateUK(e.date)+'</td>' +
           '<td class="right" style="font-weight:500;">'+priceCell+'</td>' +
-          '<td class="right" style="color:var(--text-muted);">'+fmtMoney(e.postage||0)+'</td>' +
+          '<td class="right" style="color:var(--text-muted);">'+shippingCell+'</td>' +
           '<td class="right">'+netProfitCell+'</td>' +
           (prefs.unrealisedProfit ? '<td class="right">'+fmtROI(roiForSale(e))+'</td>' : '') +
           '<td style="color:var(--text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(linkedCellTitle)+'">'+linkedCellHtml+'</td>' +
