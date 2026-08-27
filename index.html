@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.47</span>
+    <span class="version-pill">v0.48</span>
   </div>
 </div>
 
@@ -3198,7 +3198,10 @@
 
   function computeStats(list){
     var purchases = list.filter(function(e){ return e.type === 'purchase'; });
-    var sales = list.filter(function(e){ return e.type === 'sale'; });
+    // Cancelled sales never happened for business-numbers purposes — same
+    // treatment as a Cancelled purchase, excluded from every total, profit,
+    // and unit count below (but the entry itself stays in storage).
+    var sales = list.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; });
     var expenses = list.filter(function(e){ return e.type === 'expense'; });
     var income = list.filter(function(e){ return e.type === 'income'; });
 
@@ -3262,7 +3265,7 @@
     var rangeLabel = document.getElementById('analyticsRangeSelect').selectedOptions[0].text.toLowerCase();
     document.getElementById('analyticsChartSub').textContent = rangeLabel.charAt(0).toUpperCase()+rangeLabel.slice(1)+' — realised sales by sold date';
 
-    var sales = list.filter(function(e){ return e.type === 'sale'; });
+    var sales = list.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; });
     var purchases = list.filter(function(e){ return e.type === 'purchase'; });
     var s = computeStats(list);
 
@@ -3971,7 +3974,7 @@
 
     // Today's quick summary strip
     var todayISO2 = todayISO();
-    var todaySales = entries.filter(function(e){ return e.type==='sale' && e.date && e.date.slice(0,10)===todayISO2; });
+    var todaySales = entries.filter(function(e){ return e.type==='sale' && e.status !== 'Cancelled' && e.date && e.date.slice(0,10)===todayISO2; });
     var todayOrders = entries.filter(function(e){ return e.type==='purchase' && (e.purchasedOn||e.date||'').slice(0,10)===todayISO2; });
     var todayRevenue = todaySales.reduce(function(s,e){ return s+saleRevenue(e); },0);
     var summaryEl = document.getElementById('dashboardTodaySummary');
@@ -3996,7 +3999,7 @@
     var pending = purchases.filter(function(e){ return effectiveStatus(e) === 'Pending'; });
     var received = purchases.filter(function(e){ return effectiveStatus(e) === 'Received'; });
     var listed = purchases.filter(function(e){ return effectiveStatus(e) === 'Listed'; });
-    var sales = entries.filter(function(e){ return e.type === 'sale'; });
+    var sales = entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; });
     var expenses = entries.filter(function(e){ return e.type === 'expense'; });
     var income = entries.filter(function(e){ return e.type === 'income'; });
     var preorders = purchases.filter(function(e){ return e.status === 'Pre-ordered' || e.status === 'Pre-sale'; });
@@ -4062,7 +4065,7 @@
   function renderBestSeller(){
     var cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - overviewRangeDays);
-    var sales = entries.filter(function(e){ return e.type === 'sale' && new Date(e.date) >= cutoff; });
+    var sales = entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled' && new Date(e.date) >= cutoff; });
 
     var byItem = {};
     sales.forEach(function(e){
@@ -4083,7 +4086,7 @@
     }
     // Build rankings for all three metrics
     var byItem = {};
-    entries.filter(function(e){ return e.type==='sale'; }).forEach(function(e){
+    entries.filter(function(e){ return e.type==='sale' && e.status !== 'Cancelled'; }).forEach(function(e){
       if(!cutoff || new Date(e.date) >= cutoff){
         var key = e.matchedItem || e.item;
         if(!byItem[key]) byItem[key] = { label: e.item, qty: 0, revenue: 0, profit: 0 };
@@ -4103,7 +4106,7 @@
 
     // All-time best seller (by units, all time)
     var allByItem = {};
-    entries.filter(function(e){ return e.type==='sale'; }).forEach(function(e){
+    entries.filter(function(e){ return e.type==='sale' && e.status !== 'Cancelled'; }).forEach(function(e){
       var key = e.matchedItem || e.item;
       if(!allByItem[key]) allByItem[key] = { label: e.item, qty: 0 };
       allByItem[key].qty += e.qty;
@@ -4111,7 +4114,7 @@
     var allTimeBest = Object.values(allByItem).sort(function(a,b){ return b.qty-a.qty; })[0];
 
     // Latest sale date
-    var latestSale = entries.filter(function(e){ return e.type==='sale' && e.date; })
+    var latestSale = entries.filter(function(e){ return e.type==='sale' && e.status !== 'Cancelled' && e.date; })
       .sort(function(a,b){ return b.date.localeCompare(a.date); })[0];
 
     var colours = ['#6d6df0','#2dd4a0','#b78cf2','#f0b35c','#f06d6d','#378ADD'];
@@ -4254,7 +4257,7 @@
       cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - overviewRangeDays);
     }
-    var sales = entries.filter(function(e){ return e.type === 'sale' && (!cutoff || new Date(e.date) >= cutoff); });
+    var sales = entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled' && (!cutoff || new Date(e.date) >= cutoff); });
 
     var byDate = {};
     sales.forEach(function(e){
@@ -4346,7 +4349,7 @@
       return e.type === 'purchase' && (effectiveStatus(e) === 'Pending' || effectiveStatus(e) === 'Received' || effectiveStatus(e) === 'Listed');
     }).slice().sort(function(a,b){ return (b.purchasedOn||b.date||'').localeCompare(a.purchasedOn||a.date||''); }).slice(0,8);
 
-    var recentSales = entries.filter(function(e){ return e.type === 'sale'; })
+    var recentSales = entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; })
       .slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }).slice(0,8);
 
     var recentPreorders = entries.filter(function(e){
@@ -4951,7 +4954,7 @@
         var st = effectiveStatus(e);
         if(st === 'Received') received += e.qty;
         else if(st === 'Listed') listed += e.qty;
-      } else if(e.type === 'sale'){
+      } else if(e.type === 'sale' && e.status !== 'Cancelled'){
         saleLineItems(e).forEach(function(ln){
           if(ln.item === itemName) sold += ln.qty;
         });
@@ -5094,7 +5097,7 @@
   // when linking (e.g. the £616 line might really be 4 tickets, not 1).
   function soldQtyForTicketBatch(ticketEntryId){
     var tid = getTicketId(ticketEntryId);
-    return entries.filter(function(e){ return e.type === 'sale' && e.matchedItem === tid; })
+    return entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled' && e.matchedItem === tid; })
       .reduce(function(s,e){ return s + e.qty; }, 0);
   }
 
@@ -6559,6 +6562,9 @@
     var byItem = {};
     entries.forEach(function(e){
       if(e.type === 'sale' && /^TKT-\d+$/.test(e.matchedItem||'')) return;
+      // A cancelled sale never actually happened — it must not consume
+      // stock (mirrors the same treatment applied to sales totals elsewhere).
+      if(e.type === 'sale' && e.status === 'Cancelled') return;
       var key = (e.type === 'sale' && e.matchedItem) ? e.matchedItem : e.item;
       var st = e.type === 'purchase' ? effectiveStatus(e) : null;
       if(st === 'Pre-ordered' || st === 'Pre-sale') return;
@@ -7025,7 +7031,7 @@
         byItem[key].date   = entryDate;
         byItem[key].orderNumber = e.orderNumber || '';
       }
-      if(e.type === 'sale'){
+      if(e.type === 'sale' && e.status !== 'Cancelled'){
         var saleDate = (e.date||'').slice(0,10);
         if(saleDate > asOf) return; // exclude future sales
         var key2 = e.matchedItem || e.item;
@@ -7717,7 +7723,12 @@
     if(!salesTab) return;
 
     var search = (document.getElementById('salesSearch').value || '').toLowerCase();
-    var allSales = entries.filter(function(e){ return e.type === 'sale'; });
+    // Cancelled sales never happened for business-numbers purposes — same
+    // treatment as a Cancelled purchase, excluded from the list/count/totals
+    // below. The entries themselves are never deleted (still in storage/
+    // exports), just not counted as live sales here.
+    var allSales = entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; });
+    var cancelledSalesCount = entries.filter(function(e){ return e.type === 'sale' && e.status === 'Cancelled'; }).length;
 
     var sales = allSales.slice();
     if(salesPlatformFilter !== 'all') sales = sales.filter(function(e){ return (e.platform||'Other') === salesPlatformFilter; });
@@ -7736,7 +7747,8 @@
       sales = sales.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
     }
 
-    document.getElementById('salesCountSub').textContent = sales.length + ' sale'+(sales.length===1?'':'s');
+    document.getElementById('salesCountSub').textContent = sales.length + ' sale'+(sales.length===1?'':'s') +
+      (cancelledSalesCount ? ' · ' + cancelledSalesCount + ' cancelled (excluded)' : '');
     var wrap = document.getElementById('salesTableWrap');
 
     if(!sales.length){
@@ -8085,7 +8097,7 @@
     }
 
     // Filter relevant entries
-    var sales     = entries.filter(function(e){ return e.type==='sale'    && inTaxYear(e.date); });
+    var sales     = entries.filter(function(e){ return e.type==='sale'    && e.status !== 'Cancelled' && inTaxYear(e.date); });
     var purchases = entries.filter(function(e){ return e.type==='purchase'&& inTaxYear(e.purchasedOn||e.date); });
     var expenses  = entries.filter(function(e){ return e.type==='expense' && inTaxYear(e.date); });
     var income    = entries.filter(function(e){ return e.type==='income'  && inTaxYear(e.date); });
@@ -8478,7 +8490,7 @@
       return e.type === 'expense' && e.date && e.date.slice(0,10) >= dates.start && e.date.slice(0,10) <= dates.end;
     });
     var sales = entries.filter(function(e){
-      return e.type === 'sale' && e.date && e.date.slice(0,10) >= dates.start && e.date.slice(0,10) <= dates.end;
+      return e.type === 'sale' && e.status !== 'Cancelled' && e.date && e.date.slice(0,10) >= dates.start && e.date.slice(0,10) <= dates.end;
     });
     var csv = ['Type,Date,Description,Category,Qty,Amount,Card'];
     sales.forEach(function(e){ csv.push(['Sale',e.date,e.item,'Revenue',e.qty||1,saleRevenue(e),''].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',')); });
