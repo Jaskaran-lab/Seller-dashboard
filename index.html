@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.44</span>
+    <span class="version-pill">v0.45</span>
   </div>
 </div>
 
@@ -6310,6 +6310,7 @@
     }
     if(configKeys.platform) row.platform = values.platform || undefined;
     if(configKeys.postage) row.postage = values.postage ? parseFloat(values.postage) || 0 : 0;
+    if(configKeys.postageCharged) row.postageCharged = values.postageCharged ? parseFloat(values.postageCharged) || 0 : 0;
     if(configKeys.matchedItem) row.matchedItem = values.matchedItem || null;
     if(configKeys.category) row.category = values.category || '';
     if(configKeys.recurrence) row.recurrence = values.recurrence || '';
