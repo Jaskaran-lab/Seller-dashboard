@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.45</span>
+    <span class="version-pill">v0.46</span>
   </div>
 </div>
 
@@ -7255,15 +7255,16 @@
       type: 'sale',
       filter: function(){ return true; },
       columns: [
-        { key:'item',     label:'Product',       type:'text' },
-        { key:'platform', label:'Sell Platform', type:'select', options:['eBay','Viagogo','StubHub','Direct Sale','Other'] },
-        { key:'date',     label:'Sell Date',     type:'date' },
-        { key:'price',    label:'Sell Price',    type:'number' },
-        { key:'qty',      label:'Qty',           type:'number' },
-        { key:'postage',  label:'Shipping',      type:'number' },
-        { key:'notes',    label:'Notes',         type:'text' }
+        { key:'item',           label:'Product',         type:'text' },
+        { key:'platform',       label:'Sell Platform',   type:'select', options:['eBay','Viagogo','StubHub','Direct Sale','Other'] },
+        { key:'date',           label:'Sell Date',       type:'date' },
+        { key:'price',          label:'Sell Price',      type:'number' },
+        { key:'qty',            label:'Qty',             type:'number' },
+        { key:'postageCharged', label:'Shipping Charged',type:'number' },
+        { key:'postage',        label:'Shipping Paid',   type:'number' },
+        { key:'notes',          label:'Notes',           type:'text' }
       ],
-      newRowDefaults: function(){ return { type:'sale', item:'New item', platform:'Other', date:todayISO(), qty:1, price:0, postage:0 }; }
+      newRowDefaults: function(){ return { type:'sale', item:'New item', platform:'Other', date:todayISO(), qty:1, price:0, postage:0, postageCharged:0 }; }
     },
     inventory: {
       title: 'Inventory',
@@ -7346,6 +7347,8 @@
     var el = document.getElementById('sheetFooterStatus');
     if(_sheetDirty){ el.textContent = 'Unsaved changes'; el.classList.add('dirty'); }
     else { el.textContent = 'No unsaved changes'; el.classList.remove('dirty'); }
+    document.getElementById('sheetCancelBtn').textContent = _sheetDirty ? 'Cancel' : 'Close';
+    document.getElementById('sheetCancelTopBtn').textContent = _sheetDirty ? '✕ Cancel' : '✕ Close';
   }
 
   function updateSheetToolbarState(){
@@ -7358,6 +7361,13 @@
   function renderSheetTable(){
     var cfg = SHEET_CONFIGS[_sheetPage];
     var table = document.getElementById('sheetTable');
+    // Re-rendering the sheet (add/duplicate/delete/undo, and now the
+    // in-place refresh after Save) replaces the whole table body — without
+    // this, the scrollable .sheet-body wrapper snaps back to the top on
+    // every one of those, which is exactly the "scrolled back to where I
+    // was" annoyance during a long bulk-edit pass.
+    var sheetBody = document.querySelector('.sheet-body');
+    var _preservedScrollTop = sheetBody ? sheetBody.scrollTop : 0;
     var theadCols = '<th class="sheet-checkbox-cell"><input type="checkbox" class="bulk-checkbox" id="sheetSelectAll"></th>' +
       cfg.columns.map(function(c){ return '<th>'+escapeHtml(c.label)+'</th>'; }).join('') +
       '<th style="width:40px;"></th>';
@@ -7423,6 +7433,8 @@
         updateSheetToolbarState();
       });
     });
+
+    if(sheetBody) sheetBody.scrollTop = _preservedScrollTop;
   }
 
   function sheetAddRow(){
@@ -7500,8 +7512,23 @@
     });
     saveEntries();
     renderAll();
+
+    // Stay open after saving instead of closing the sheet — previously this
+    // closed the whole bulk-editor, so continuing to edit more rows meant
+    // reopening it and scrolling all the way back down to where you were.
+    // Rebuild the working copy from what was just saved (drops now-deleted
+    // rows, clears the "new" row flag) and re-render in place; that render
+    // preserves scroll position (see renderSheetTable()).
+    _sheetRows = entries.filter(function(e){ return e.type === cfg.type && cfg.filter(e); })
+      .map(function(e){ return JSON.parse(JSON.stringify(e)); });
+    _sheetDeleted = new Set();
+    _sheetSelected = new Set();
+    _sheetUndoStack = [];
+    _sheetDirty = false;
+    renderSheetTable();
+    updateSheetFooter();
+    updateSheetToolbarState();
     showToast('Saved changes ✓');
-    closeSheet(true);
   }
 
   document.getElementById('sheetUndoBtn').addEventListener('click', sheetUndo);
