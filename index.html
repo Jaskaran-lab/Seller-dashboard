@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.43</span>
+    <span class="version-pill">v0.44</span>
   </div>
 </div>
 
@@ -4935,6 +4935,31 @@
     return lines;
   }
 
+  // How many units of a purchased item are currently free to sell: everything
+  // Received or Listed, minus whatever every OTHER sale (matchedItem or a
+  // bundle row) has already drawn against it. excludeEntryId lets the Sale
+  // modal check "stock as if this sale being edited didn't exist yet" so
+  // editing a sale's own qty doesn't double-count against itself. Ticket
+  // batches aren't purchase-tracked stock (see soldQtyForTicketBatch) so this
+  // only applies to plain inventory items.
+  function stockAvailableForItem(itemName, excludeEntryId){
+    if(!itemName) return null;
+    var received = 0, listed = 0, sold = 0;
+    entries.forEach(function(e){
+      if(excludeEntryId && e.id === excludeEntryId) return;
+      if(e.type === 'purchase' && e.item === itemName){
+        var st = effectiveStatus(e);
+        if(st === 'Received') received += e.qty;
+        else if(st === 'Listed') listed += e.qty;
+      } else if(e.type === 'sale'){
+        saleLineItems(e).forEach(function(ln){
+          if(ln.item === itemName) sold += ln.qty;
+        });
+      }
+    });
+    return (received + listed) - sold;
+  }
+
   // Total cost basis for a sale across every linked item (bundle-aware).
   // Returns null — never 0 — when nothing is linked, or when any linked
   // line can't be matched to a purchase, so an incomplete bundle link never
@@ -6311,6 +6336,33 @@
       bundleRows = _saleBundleRows
         .filter(function(r){ return r.item; })
         .map(function(r){ return { item: r.item, qty: parseFloat(r.qty) || 1 }; });
+    }
+
+    // Warn — but don't block — when this sale (primary item and/or bundle
+    // rows) would sell more than is currently Received+Listed. This is a
+    // known real scenario: an order confirmation can land before its stock
+    // has been logged as received, so oversells happen legitimately and
+    // shouldn't stop the sale from saving. The Inventory page already shows
+    // the resulting negative stock in red; this just surfaces it at the
+    // moment it's created instead of only after the fact.
+    if(activeModalConfig === MODAL_CONFIGS.sale){
+      var _stockLines = [];
+      if(values.matchedItem && !/^TKT-\d+$/.test(values.matchedItem)){
+        _stockLines.push({ item: values.matchedItem, qty: parseFloat(values.qty) || 1 });
+      }
+      (bundleRows||[]).forEach(function(r){ _stockLines.push(r); });
+      var _oversold = [];
+      _stockLines.forEach(function(ln){
+        var available = stockAvailableForItem(ln.item, editingEntryId);
+        if(available === null) return;
+        var remaining = available - ln.qty;
+        if(remaining < 0){
+          _oversold.push(ln.item + ' (' + available + ' in stock, selling ' + ln.qty + ')');
+        }
+      });
+      if(_oversold.length){
+        showToast('Oversold — ' + _oversold.join('; ') + '. Saved anyway; check if the purchase/order still needs logging.', true);
+      }
     }
 
     if(editingEntryId){
