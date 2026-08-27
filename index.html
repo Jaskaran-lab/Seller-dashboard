@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.42</span>
+    <span class="version-pill">v0.43</span>
   </div>
 </div>
 
@@ -5031,6 +5031,20 @@
     return e.qty * e.price + (e.postageCharged||0);
   }
 
+  // Line total for the Sales table's "Sell Price" column — deliberately NOT
+  // the same as saleRevenue() (which folds in postageCharged; this column
+  // has its own separate Shipping column, so postage would be double-shown).
+  // Ticket-linked sales already store price as a line total (see comment on
+  // saleRevenue() above); every other sale type stores a per-unit price, so
+  // this multiplies by qty. This is the fix for the qty-3-shows-as-qty-1 bug
+  // reported against ITM-306 (Topps UCC Gold): qty 3 @ GBP200 was displaying
+  // as just GBP200 instead of GBP600.
+  function saleItemTotal(e){
+    var match = resolveMatchedEntry(e.matchedItem);
+    if(match && match.type === 'ticket') return e.price||0;
+    return (e.qty||1) * (e.price||0);
+  }
+
   // an unlinked sale has no known cost basis, so "no profit figure" is the
   // honest answer rather than silently treating cost as zero.
   function netProfitForSale(saleEntry){
@@ -6211,6 +6225,24 @@
       values[f.key] = val;
     });
     if(missingRequired){ showToast('Fill in the required field(s) first.', true); return; }
+
+    // A bundle row that repeats the primary Linked item (or repeats another
+    // bundle row) double-counts that item's cost in costBasisForSale() —
+    // saleLineItems() sums a cost line per row with no dedup, so the same
+    // purchase gets charged twice. Qty already covers "more than one unit of
+    // the same item"; bundle rows are only for genuinely different items
+    // drawn into the same sale. Caught this from a real sale (qty 3 of one
+    // item, plus that same item added again as a bundle row) that showed a
+    // false loss because its cost basis was counted twice.
+    if(activeModalConfig === MODAL_CONFIGS.sale){
+      var _bundleItemNames = _saleBundleRows.filter(function(r){ return r.item; }).map(function(r){ return r.item; });
+      var _dupWithPrimary = values.matchedItem && _bundleItemNames.indexOf(values.matchedItem) !== -1;
+      var _dupWithinBundle = _bundleItemNames.some(function(n, i){ return _bundleItemNames.indexOf(n) !== i; });
+      if(_dupWithPrimary || _dupWithinBundle){
+        showToast('A bundle item can\'t repeat the Linked item or another bundle row — that double-counts its cost. Increase Qty sold instead.', true);
+        return;
+      }
+    }
 
     var entryDate = values.purchasedOn || values.date;
 
@@ -7553,7 +7585,7 @@
       platform:  function(a,b){ return compareText(a.platform,b.platform); },
       date:      function(a,b){ return compareText(a.date,b.date); },
       qty:       function(a,b){ return compareNumber(a.qty,b.qty); },
-      price:     function(a,b){ return compareNumber(a.price,b.price); },
+      price:     function(a,b){ return compareNumber(saleItemTotal(a),saleItemTotal(b)); },
       postage:   function(a,b){ return compareNumber(a.postage,b.postage); },
       netProfit: function(a,b){ return compareNumber(netProfitForSale(a),netProfitForSale(b)); }
     });
@@ -7604,10 +7636,18 @@
         var extraLinks = e.extraLinkedItems||[];
         var linkedCellTitle = linkedName + (extraLinks.length ? ', ' + extraLinks.map(function(x){ return x.item+' x'+(x.qty||1); }).join(', ') : '');
         var linkedCellHtml = escapeHtml(linkedName||'—') + (extraLinks.length ? ' <span style="color:var(--indigo);">+'+extraLinks.length+' more</span>' : '');
-        var priceCell = fmtMoney(e.price);
+        // Sell Price column: for every sale type except tickets, price is a
+        // per-unit figure and qty is genuinely separate (see saleItemTotal()/
+        // saleRevenue()) — showing e.price alone here made a qty-3 sale look
+        // like it only sold for its unit price. Headline is now the line
+        // total, matching the Revenue figure in the footer below, with the
+        // per-unit price shown as a muted sub-line when qty isn't 1.
+        var priceCell = fmtMoney(saleItemTotal(e));
         if(linkedMatch && linkedMatch.type==='ticket'){
           var each = e.qty>0 ? e.price/e.qty : e.price;
           priceCell = fmtMoney(e.price)+'<div style="color:var(--text-muted);font-size:10px;">total · '+fmtMoney(each)+' each</div>';
+        } else if((e.qty||1) !== 1){
+          priceCell += '<div style="color:var(--text-muted);font-size:10px;">'+(e.qty||1)+' × '+fmtMoney(e.price)+' each</div>';
         }
         // Shipping cell shows what you PAID as the headline figure (the real
         // cost, matching netProfitForSale()) with what was CHARGED to the
