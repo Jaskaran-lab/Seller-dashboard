@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.49</span>
+    <span class="version-pill">v0.50</span>
   </div>
 </div>
 
@@ -2544,7 +2544,19 @@
   var charts = {};
 
   function uid(){ return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  // Formats a Date as its LOCAL calendar-day ISO string (YYYY-MM-DD).
+  // Deliberately NOT .toISOString() — that converts through UTC, and during
+  // British Summer Time (UTC+1) a Date meaning "today" or "this local day"
+  // sits at 23:00 the previous day once expressed in UTC, so .toISOString()
+  // silently shifts the date back by one. This is the root cause of sale/
+  // purchase dates coming out a day earlier than reality (see PROGRESS.md).
+  function toLocalISO(d){
+    var y = d.getFullYear();
+    var m = String(d.getMonth()+1).padStart(2,'0');
+    var day = String(d.getDate()).padStart(2,'0');
+    return y + '-' + m + '-' + day;
+  }
+  function todayISO(){ return toLocalISO(new Date()); }
 
   var CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', JPY: '¥' };
   var CURRENCY_LOCALES = { GBP: 'en-GB', USD: 'en-US', EUR: 'en-IE', JPY: 'ja-JP' };
@@ -2579,7 +2591,7 @@
   function parseDateSafe(s){
     var d = new Date(s);
     if(isNaN(d.getTime())) return todayISO();
-    return d.toISOString().slice(0,10);
+    return toLocalISO(d);
   }
   // Storage stays ISO (YYYY-MM-DD) everywhere — sorting and filtering depend on
   // that lexical order. This only changes how a date is displayed to the person.
@@ -3630,7 +3642,7 @@
       if(isNaN(d.getTime())) return null;
       var day = (d.getDay()+6)%7;
       d.setDate(d.getDate()-day);
-      return d.toISOString().slice(0,10);
+      return toLocalISO(d);
     }
 
     var weekly = {};
@@ -8238,7 +8250,7 @@
     var now = new Date();
     var thisMonthPrefix = todayISO().slice(0,7);
     var thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay()===0?-6:1));
-    var thisWeekISO = thisWeekStart.toISOString().slice(0,10);
+    var thisWeekISO = toLocalISO(thisWeekStart);
 
     var allExpenses = entries.filter(function(e){ return e.type === 'expense'; });
 
@@ -8858,7 +8870,7 @@
       var purchasedOn = todayISO();
       if(dateCol && row[dateCol]){
         var dv = row[dateCol];
-        if(dv instanceof Date) purchasedOn = dv.toISOString().slice(0,10);
+        if(dv instanceof Date) purchasedOn = toLocalISO(dv);
         else purchasedOn = parseDateSafe(String(dv));
       }
       parsed.push({
@@ -9009,7 +9021,7 @@
     var yr = 2000 + parseInt(m[3],10);
     if(mon === undefined) return todayISO();
     var d = new Date(yr, mon, day);
-    return d.toISOString().slice(0,10);
+    return toLocalISO(d);
   }
 
   var MULTIPLIER_PATTERNS = [
@@ -9088,7 +9100,7 @@
     var rest = parts.slice(1).join(' ');
     var d = new Date(rest + ' 00:00:00');
     if(isNaN(d.getTime())) return null;
-    return d.toISOString().slice(0,10);
+    return toLocalISO(d);
   }
 
   // Collapses any "...Business..." or "...Personal..." card label down to the
@@ -9240,7 +9252,7 @@
     var day = parseInt(m[1],10), month = parseInt(m[2],10), year = parseInt(m[3],10);
     var d = new Date(year, month-1, day);
     if(isNaN(d.getTime())) return todayISO();
-    return d.toISOString().slice(0,10);
+    return toLocalISO(d);
   }
 
   // Viagogo uses accounting notation — a fee deducted shows as "(1.60)" rather
