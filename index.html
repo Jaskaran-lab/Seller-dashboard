@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.51</span>
+    <span class="version-pill">v0.52</span>
   </div>
 </div>
 
@@ -7829,17 +7829,24 @@
         // Sold status pill
         var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
           '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
-        // Globe badge — flags a sale shipped via eBay's Global Shipping
+        // Globe icon — flags a sale shipped via eBay's Global Shipping
         // Programme / International Shipping (you ship domestically, eBay
         // forwards it abroad), auto-detected server-side in Code.gs
-        // (detectGSP()) for eBay API imports, or set by hand below for
-        // anything imported another way. Same small-pill style as the
-        // Inventory page's ghostBadge/salesBadge.
-        var gspBadge = e.gsp ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--indigo-dim);color:var(--indigo);" title="Global Shipping Programme / International Shipping — shipped domestically, eBay forwarded it abroad.">🌍 GSP</span>' : '';
+        // (detectGSP()) for eBay API imports. Sits next to the ID, coloured
+        // with var(--violet) (the tracker's "iOS purple" accent — see the
+        // --violet definitions at the top of the file) when set, dimmed to
+        // var(--text-muted) when not — inline SVG, not the 🌍 emoji, so the
+        // colour actually applies and it stays crisp at a tiny size in both
+        // themes. Always rendered (not just when true) and clickable, so
+        // going back through older sales that predate auto-detection is a
+        // single click per row instead of opening the full Edit modal each
+        // time — wired below via [data-gsp-toggle], same pattern as the
+        // Pre-Orders "Paid?" and Tickets "Paid back?" quick-toggles.
+        var gspIcon = ' <span data-gsp-toggle="'+escapeAttr(e.id)+'" style="display:inline-flex;vertical-align:-2px;cursor:pointer;color:'+(e.gsp?'var(--violet)':'var(--text-muted)')+';opacity:'+(e.gsp?'1':'0.45')+';" title="'+(e.gsp?'Global Shipping Programme / International Shipping — click to unmark':'Not marked as GSP — click if this sale went through eBay\'s Global Shipping Programme / International Shipping')+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span>';
         return '<tr data-bulk-id="'+escapeAttr(e.id)+'">' +
-          '<td style="font-size:11px;">'+fmtItemId(itemId||('S-'+e.id.slice(0,4)))+'</td>' +
+          '<td style="font-size:11px;white-space:nowrap;">'+fmtItemId(itemId||('S-'+e.id.slice(0,4)))+gspIcon+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'">' +
-            '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>'+gspBadge+
+            '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>' +
           '</td>' +
           '<td>'+soldPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+escapeHtml(e.platform||'—')+'</td>' +
@@ -7895,6 +7902,19 @@
     wrap.querySelectorAll('[data-delete-entry]').forEach(function(btn){
       btn.addEventListener('click', function(){
         deleteEntry(this.getAttribute('data-delete-entry'), this.getAttribute('data-delete-label'));
+      });
+    });
+    // GSP quick-toggle — click the globe icon to flip e.gsp without opening
+    // the Edit modal, for going back through older/historical sales.
+    wrap.querySelectorAll('[data-gsp-toggle]').forEach(function(icon){
+      icon.addEventListener('click', function(){
+        var id = this.getAttribute('data-gsp-toggle');
+        var entry = entries.find(function(e){ return e.id === id; });
+        if(!entry) return;
+        entry.gsp = !entry.gsp;
+        saveEntries();
+        renderSalesTable();
+        showToast(entry.gsp ? 'Marked as GSP sale' : 'Unmarked as GSP sale');
       });
     });
   }
