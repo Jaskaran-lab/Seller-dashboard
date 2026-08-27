@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.50</span>
+    <span class="version-pill">v0.51</span>
   </div>
 </div>
 
@@ -5815,6 +5815,7 @@
         { key: 'price', label: 'Sale price', kind: 'number', placeholder: 'Per unit, or total if linked to a ticket batch', step: '0.01' },
         { key: 'postageCharged', label: 'Shipping charged to buyer', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'postage', label: 'Shipping you paid', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'gsp', label: 'Global Shipping Programme (GSP)?', kind: 'checkbox' },
         { key: 'matchedItem', label: 'Linked item', kind: 'combobox', placeholder: 'Search purchased items or ticket batches...', comboEmptyLabel: '— no linked item —', comboStrict: true,
           resolveDisplay: function(val){ var m = resolveMatchedEntry(val); return m ? m.item : val; } },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
@@ -7828,10 +7829,17 @@
         // Sold status pill
         var soldPill = '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--green-dim);color:var(--green);font-size:11px;font-weight:600;">' +
           '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);"></span>Sold</span>';
+        // Globe badge — flags a sale shipped via eBay's Global Shipping
+        // Programme / International Shipping (you ship domestically, eBay
+        // forwards it abroad), auto-detected server-side in Code.gs
+        // (detectGSP()) for eBay API imports, or set by hand below for
+        // anything imported another way. Same small-pill style as the
+        // Inventory page's ghostBadge/salesBadge.
+        var gspBadge = e.gsp ? ' <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--indigo-dim);color:var(--indigo);" title="Global Shipping Programme / International Shipping — shipped domestically, eBay forwarded it abroad.">🌍 GSP</span>' : '';
         return '<tr data-bulk-id="'+escapeAttr(e.id)+'">' +
           '<td style="font-size:11px;">'+fmtItemId(itemId||('S-'+e.id.slice(0,4)))+'</td>' +
           '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeAttr(e.item)+'">' +
-            '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>' +
+            '<span style="font-weight:500;">'+escapeHtml(e.item)+'</span>'+gspBadge+
           '</td>' +
           '<td>'+soldPill+'</td>' +
           '<td style="color:var(--text-secondary);font-size:12px;">'+escapeHtml(e.platform||'—')+'</td>' +
