@@ -1080,7 +1080,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.52</span>
+    <span class="version-pill">v0.53</span>
   </div>
 </div>
 
@@ -5778,7 +5778,7 @@
         { key: 'brand', label: 'Brand', kind: 'text', placeholder: 'e.g. LEGO, Nike (optional)' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Received','Listed','Pending','Cancelled','Returned'], default: 'Pending' },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
-        { key: 'email', label: 'Email used', kind: 'select', options: function(){ return lists.emails; } },
+        { key: 'email', label: 'Email used', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
         { key: 'purchasedOn', label: 'Date sourced', kind: 'date' },
         { key: 'notes', label: 'Notes', kind: 'text', placeholder: '—' }
       ]
@@ -5795,7 +5795,7 @@
         { key: 'brand',       label: 'Brand',             kind: 'text',     placeholder: 'e.g. LEGO, Nike (optional)' },
         { key: 'purchasedOn', label: 'Date purchased',    kind: 'date' },
         { key: 'cardUsed',    label: 'Card used',         kind: 'select',   options: function(){ return lists.cards; } },
-        { key: 'email',       label: 'Email used',        kind: 'select',   options: function(){ return lists.emails; } },
+        { key: 'email', label: 'Email used', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
         { key: 'orderNumber',   label: 'Order number',      kind: 'text',     placeholder: '—' },
         { key: 'trackingNumber',label: 'Tracking number',   kind: 'text',     placeholder: 'e.g. AB123456789GB' },
         { key: 'postage',     label: 'Postage paid',      kind: 'number',   placeholder: '0.00', step: '0.01' },
@@ -5830,7 +5830,7 @@
         { key: 'site', label: 'Purchase site', kind: 'combobox', placeholder: 'Search retailers, or type a new one...', comboSource: 'retailers', comboEmptyLabel: '— no retailer —' },
         { key: 'price', label: 'Buy price', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'qty', label: 'Qty', kind: 'number', placeholder: '1', default: '1' },
-        { key: 'email', label: 'Email used', kind: 'select', options: function(){ return lists.emails; } },
+        { key: 'email', label: 'Email used', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
         { key: 'purchasedOn', label: 'Date ordered', kind: 'date' },
         { key: 'releaseDate', label: 'Expected arrival', kind: 'date' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Pre-ordered','Pre-sale','Received','Cancelled','Returned'], default: 'Pre-ordered' },
@@ -5849,7 +5849,7 @@
         { key: 'qty',        label: 'Quantity',      kind: 'number',   placeholder: '1', default: '1' },
         { key: 'recurrence', label: 'Expense Type',  kind: 'select',   options: ['One-off','Weekly','Monthly','Yearly'], default: 'One-off' },
         { key: 'cardUsed',   label: 'Paid With',     kind: 'select',   options: function(){ return lists.cards; } },
-        { key: 'email',      label: 'Email / Source',kind: 'select',   options: function(){ return lists.emails; } },
+        { key: 'email', label: 'Email / Source', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
         { key: 'notes',      label: 'Notes',         kind: 'text',     placeholder: 'Optional notes...' }
       ]
     },
@@ -5861,7 +5861,7 @@
         { key: 'price', label: 'Amount', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'date', label: 'Date', kind: 'date' },
         { key: 'status', label: 'Status', kind: 'select', options: ['Received','Pending'], default: 'Received' },
-        { key: 'email', label: 'Associated account', kind: 'select', options: function(){ return lists.emails; } }
+        { key: 'email', label: 'Associated account', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' }
       ]
     },
     ticket: {
@@ -5876,7 +5876,7 @@
         { key: 'price', label: 'Cost per ticket', kind: 'number', placeholder: '0.00', step: '0.01' },
         { key: 'row', label: 'Row', kind: 'text', placeholder: 'e.g. 73' },
         { key: 'seats', label: 'Seats', kind: 'text', placeholder: 'e.g. 228-231, or Standing' },
-        { key: 'email', label: 'Email used', kind: 'select', options: function(){ return lists.emails; } },
+        { key: 'email', label: 'Email used', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
         { key: 'orderNumber', label: 'Order ID', kind: 'text', placeholder: 'e.g. 74784' },
         { key: 'ticketType', label: 'Ticket type', kind: 'text', placeholder: 'e.g. Mobile Transfer' },
         { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
@@ -6186,8 +6186,26 @@
         return list;
       }
 
+      // Email suggestions are built from whatever's actually been used across
+      // real entries (most-used first), not a fixed list — accounts get
+      // added here automatically as scanEbaySales()/the email scanners/
+      // backfillEmailUsed() set them server-side, with no manual list
+      // maintenance needed. Falls back to the placeholder lists.emails
+      // examples only when nothing real has been used yet.
+      function usedEmails(){
+        var counts = {};
+        entries.forEach(function(e){
+          var em = (e.email || '').trim();
+          if(em) counts[em] = (counts[em] || 0) + 1;
+        });
+        var used = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; });
+        if(!used.length) used = lists.emails.slice();
+        return used.map(function(em){ return { value: em, label: em, venue: '' }; });
+      }
+
       function sourceList(){
         if(source === 'retailers') return lists.retailers.map(function(r){ return { value: r, label: r, venue: '' }; });
+        if(source === 'emails') return usedEmails();
         return linkableItems();
       }
 
