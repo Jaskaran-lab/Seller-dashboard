@@ -796,6 +796,8 @@
   .modal-field label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px; }
   .modal-field-row { display: flex; gap: 8px; }
   .modal-field-row .modal-field { flex: 1; }
+  .modal-section-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .modal-section-label:first-child { margin-top: 0; padding-top: 0; border-top: none; }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
   .settings-shell { display: flex; gap: 20px; align-items: flex-start; }
@@ -1068,6 +1070,7 @@
     <div class="nav-item" data-page="analytics"><span class="ic">◳</span> Analytics</div>
     <div class="nav-item" data-page="orders"><span class="ic">▤</span> Orders</div>
     <div class="nav-item" data-page="sales"><span class="ic">£</span> Sales</div>
+    <div class="nav-item" data-page="tickets"><span class="ic">🎟</span> Tickets</div>
     <div class="nav-item" data-page="inventory"><span class="ic">▣</span> Inventory</div>
     <div class="nav-item" data-page="preorders"><span class="ic">◷</span> Pre-Orders</div>
     <div class="nav-item" data-page="expenses"><span class="ic">⊟</span> Expenses</div>
@@ -1080,7 +1083,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.53</span>
+    <span class="version-pill">v0.54</span>
   </div>
 </div>
 
@@ -1356,58 +1359,55 @@
     </div>
   </div>
 
-  <div class="page" id="page-inventory">
+  <div class="page" id="page-tickets">
     <div class="page-header">
-      <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
+      <div><h1>Tickets</h1><p>Event tickets with a countdown to the event — and the after-event payout each platform still owes you</p></div>
       <div class="header-right">
-        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
-        <button class="btn btn-sheet-trigger" id="bulkEditInventoryBtn">⊞ Bulk Edit</button>
-        <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
+        <input type="text" id="ticketsSearch" placeholder="Search event, venue or seat" style="max-width:220px;">
+        <button class="btn btn-primary" id="addTicketBtn">+ Add ticket</button>
       </div>
     </div>
 
-    <div class="tabs">
-      <div class="tab active" data-inv-subtab="stock">Stock</div>
-      <div class="tab" data-inv-subtab="tickets">Tickets</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+      <div style="display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px;">
+        <button class="inv-view-tab active" data-ticketsview="cards" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">Overview</button>
+        <button class="inv-view-tab" data-ticketsview="table" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊞ Table</button>
+      </div>
     </div>
 
-    <div class="inv-subtab-content active" data-inv-subtab="stock">
-      <div class="stat-row" id="invSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
+    <div id="ticketsCardsView">
+      <div class="stat-row" id="ticketsStatRow" style="grid-template-columns: repeat(4, 1fr);"></div>
 
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <div class="seg" id="invStatusFilter" style="width:fit-content;">
-          <button class="seg-btn active" data-status="all">All</button>
-          <button class="seg-btn" data-status="Received">Received</button>
-          <button class="seg-btn" data-status="Listed">Listed</button>
-          <button class="seg-btn" data-status="Awaiting Return">Awaiting return</button>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start;">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>In hand <span class="badge badge-in" id="ticketsInHandCountBadge" style="margin-left:4px;">0</span></h2>
+              <span class="sub">grouped by event — nearest first</span>
+            </div>
+          </div>
+          <div id="ticketsInHandWrap"></div>
         </div>
-        <div style="flex:1;"></div>
-        <div id="invGroupByTabs" style="display:none;gap:4px;">
-          <button class="inv-groupby-tab active" data-invgroupby="item" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:var(--surface-2);color:var(--text-primary);font-weight:600;">Item</button>
-          <button class="inv-groupby-tab" data-invgroupby="site" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Retailer</button>
-          <button class="inv-groupby-tab" data-invgroupby="brand" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Brand</button>
-        </div>
-        <div style="display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px;">
-          <button class="inv-view-tab active" data-invview="table" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">⊞ Table</button>
-          <button class="inv-view-tab" data-invview="grouped" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊟ Grouped</button>
-        </div>
-      </div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>Inventory</h2>
-            <span class="sub" id="invCountSub">0 items</span>
+        <div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head">
+              <div><h2>Where the money is</h2><span class="sub">net of each platform's fees</span></div>
+            </div>
+            <div id="ticketsWhereMoneyWrap"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div><h2>Paid out <span class="badge badge-sold" id="ticketsPaidOutCountBadge" style="margin-left:4px;">0</span></h2></div>
+            </div>
+            <div id="ticketsPaidOutWrap"></div>
           </div>
         </div>
-        <div id="invTableWrap"></div>
       </div>
-
     </div>
 
-    <div class="inv-subtab-content" data-inv-subtab="tickets">
-
-      <div class="stat-row" id="ticketsSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
+    <div id="ticketsTableView" style="display:none;">
+      <div class="stat-row" id="ticketsSummaryRow" style="grid-template-columns: repeat(3, 1fr); margin-bottom:16px;"></div>
 
       <div class="panel">
         <div class="panel-head">
@@ -1427,17 +1427,54 @@
       <div class="panel">
         <div class="panel-head">
           <div>
-            <h2>Tickets</h2>
+            <h2>All ticket batches</h2>
             <span class="sub" id="ticketsCountSub">0 tickets</span>
-          </div>
-          <div class="header-right">
-            <input type="text" id="ticketsSearch" placeholder="Search tickets..." style="max-width:220px;">
-            <button class="btn btn-primary" id="addTicketBtn">+ Add</button>
           </div>
         </div>
         <div id="ticketsTableWrap"></div>
       </div>
+    </div>
+  </div>
 
+  <div class="page" id="page-inventory">
+    <div class="page-header">
+      <div><h1>Inventory</h1><p>Central stock database with status tracking</p></div>
+      <div class="header-right">
+        <input type="text" id="invSearch" placeholder="Search inventory..." style="max-width:220px;">
+        <button class="btn btn-sheet-trigger" id="bulkEditInventoryBtn">⊞ Bulk Edit</button>
+        <button class="btn btn-primary" id="addInventoryBtn">+ Add</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="invSummaryRow" style="grid-template-columns: repeat(3, 1fr);"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <div class="seg" id="invStatusFilter" style="width:fit-content;">
+        <button class="seg-btn active" data-status="all">All</button>
+        <button class="seg-btn" data-status="Received">Received</button>
+        <button class="seg-btn" data-status="Listed">Listed</button>
+        <button class="seg-btn" data-status="Awaiting Return">Awaiting return</button>
+      </div>
+      <div style="flex:1;"></div>
+      <div id="invGroupByTabs" style="display:none;gap:4px;">
+        <button class="inv-groupby-tab active" data-invgroupby="item" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:var(--surface-2);color:var(--text-primary);font-weight:600;">Item</button>
+        <button class="inv-groupby-tab" data-invgroupby="site" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Retailer</button>
+        <button class="inv-groupby-tab" data-invgroupby="brand" style="padding:5px 12px;font-size:12px;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary);">Brand</button>
+      </div>
+      <div style="display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px;">
+        <button class="inv-view-tab active" data-invview="table" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:var(--indigo);color:#fff;">⊞ Table</button>
+        <button class="inv-view-tab" data-invview="grouped" style="padding:4px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-secondary);">⊟ Grouped</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Inventory</h2>
+          <span class="sub" id="invCountSub">0 items</span>
+        </div>
+      </div>
+      <div id="invTableWrap"></div>
     </div>
   </div>
 
@@ -2928,6 +2965,7 @@
     { key: 'analytics', label: 'Analytics' },
     { key: 'orders', label: 'Orders' },
     { key: 'sales', label: 'Sales' },
+    { key: 'tickets', label: 'Tickets' },
     { key: 'inventory', label: 'Inventory' },
     { key: 'preorders', label: 'Pre-Orders' },
     { key: 'expenses', label: 'Expenses' },
@@ -4454,6 +4492,7 @@
     renderOrdersTable();
     renderInventoryPage();
     renderTicketsTable();
+    renderTicketsPage();
     renderSalesTable();
     renderPreordersTable();
     renderExpensesTable();
@@ -4505,7 +4544,16 @@
       recurrence: r.recurrence || '', reminderDate: r.reminderDate || '', releaseDate: r.releaseDate || '',
       venue: r.venue || '', eventDate: r.eventDate || '', row: r.row || '', seats: r.seats || '',
       ticketType: r.ticketType || '', paidBackInitial: !!r.paidBackInitial,
-      paidStatus: !!r.paidStatus
+      paidStatus: !!r.paidStatus,
+      // Ticket-section extras (also used by Purchases for expectedSellPrice) —
+      // additive/optional, default to '' or 0 so nothing else that reads an
+      // entry needs to null-check these.
+      expectedSellPrice: typeof r.expectedSellPrice === 'number' ? r.expectedSellPrice : 0,
+      artist: r.artist || '', block: r.block || '', boughtFrom: r.boughtFrom || '',
+      faceValue: typeof r.faceValue === 'number' ? r.faceValue : 0,
+      bookingFee: typeof r.bookingFee === 'number' ? r.bookingFee : 0,
+      bookingFees: typeof r.bookingFees === 'number' ? r.bookingFees : 0,
+      imageUrl: r.imageUrl || ''
     };
   }
 
@@ -5111,6 +5159,81 @@
     var tid = getTicketId(ticketEntryId);
     return entries.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled' && e.matchedItem === tid; })
       .reduce(function(s,e){ return s + e.qty; }, 0);
+  }
+
+  // The single sale entry the Tickets page's combined Add/Edit modal treats
+  // as "the" sale for a ticket batch (the common case — one batch, one
+  // buyer). A batch sold in several pieces via the ordinary Sale modal will
+  // have more than one linked sale; this just surfaces the first for editing
+  // inline — the rest stay fully visible/editable from the Sales page as
+  // normal.
+  function linkedSaleForTicket(ticketEntryId){
+    var tid = getTicketId(ticketEntryId);
+    return entries.find(function(e){ return e.type === 'sale' && e.status !== 'Cancelled' && e.matchedItem === tid; }) || null;
+  }
+
+  // Reads the ticket modal's bolted-on "The sale" section and creates/updates
+  // the one linked type:'sale' entry accordingly. Called for both new and
+  // edited ticket entries, right after the ticket entry itself has a real id.
+  // Deliberately does NOT delete a linked sale when "Not sold" is
+  // (re-)selected — that would silently destroy real financial history.
+  function applyTicketSaleFromModal(ticketEntry){
+    var toggle = document.getElementById('ticketSoldToggle');
+    if(!toggle) return;
+    var activeBtn = toggle.querySelector('.seg-btn.active');
+    var isSold = !!activeBtn && activeBtn.getAttribute('data-ticket-sold') === '1';
+    var existingSale = linkedSaleForTicket(ticketEntry.id);
+
+    if(!isSold){
+      if(existingSale){
+        showToast('Marked Not sold — the linked sale record was kept. Delete it from Sales if that was intentional.', true);
+      }
+      return;
+    }
+
+    var priceEl = document.getElementById('ticketSoldPrice');
+    var dateEl = document.querySelector('[data-modal-field="ticketSoldDate"]');
+    var platformEl = document.getElementById('ticketSoldPlatform');
+    var feesEl = document.getElementById('ticketSellingFees');
+    var payoutEl = document.getElementById('ticketPayoutReceived');
+    var transferEl = document.getElementById('ticketTransferred');
+
+    var soldPrice = parseFloat(priceEl && priceEl.value) || 0;
+    var soldDateRaw = dateEl ? dateEl.getAttribute('data-value') : '';
+    var soldDate = soldDateRaw ? parseDateSafe(soldDateRaw) : todayISO();
+    var soldPlatform = (platformEl && platformEl.value) || 'Other';
+    var sellingFees = parseFloat(feesEl && feesEl.value) || 0;
+    var payoutReceived = !!(payoutEl && payoutEl.checked);
+    var ticketsTransferred = !!(transferEl && transferEl.checked);
+
+    if(!soldPrice){
+      showToast('Ticket saved, but "Sold for (per ticket)" is needed to record the sale — add it and save again.', true);
+      return;
+    }
+
+    var tid = getTicketId(ticketEntry.id);
+    if(existingSale){
+      existingSale.item = ticketEntry.item;
+      existingSale.qty = ticketEntry.qty;
+      existingSale.price = soldPrice;
+      existingSale.date = soldDate;
+      existingSale.platform = soldPlatform;
+      existingSale.sellingFees = sellingFees;
+      existingSale.payoutReceived = payoutReceived;
+      existingSale.ticketsTransferred = ticketsTransferred;
+    } else {
+      entries.push({
+        id: uid(), item: ticketEntry.item, qty: ticketEntry.qty, price: soldPrice, type: 'sale',
+        date: soldDate, category: '', site: '', brand: '', purchasedOn: soldDate,
+        orderNumber: '', postage: 0, postageCharged: 0, gsp: false,
+        matchedItem: tid, status: 'Sold', email: ticketEntry.email || '', cardUsed: ticketEntry.cardUsed || '',
+        notes: 'Ticket sale — recorded from the Tickets page.', platform: soldPlatform,
+        recurrence: '', reminderDate: '', releaseDate: '', venue: '', eventDate: '', row: '', seats: '',
+        ticketType: '', paidBackInitial: false, paidStatus: false, expectedSellPrice: 0,
+        artist: '', block: '', boughtFrom: '', faceValue: 0, bookingFee: 0, bookingFees: 0, imageUrl: '',
+        sellingFees: sellingFees, payoutReceived: payoutReceived, ticketsTransferred: ticketsTransferred
+      });
+    }
   }
 
   // ---------- Orders tab ----------
@@ -5865,22 +5988,38 @@
       ]
     },
     ticket: {
-      title: 'Add ticket batch',
+      title: 'Add tickets',
       type: 'ticket',
       fields: [
-        { key: 'item', label: 'Event name', kind: 'text', placeholder: 'e.g. Imagine Dragons', required: true },
-        { key: 'venue', label: 'Venue', kind: 'text', placeholder: 'e.g. Tottenham Hotspurs Stadium' },
-        { key: 'eventDate', label: 'Event date', kind: 'date' },
-        { key: 'purchasedOn', label: 'Purchase date', kind: 'date' },
-        { key: 'qty', label: 'Number of tickets', kind: 'number', placeholder: '1', default: '1' },
-        { key: 'price', label: 'Cost per ticket', kind: 'number', placeholder: '0.00', step: '0.01' },
-        { key: 'row', label: 'Row', kind: 'text', placeholder: 'e.g. 73' },
-        { key: 'seats', label: 'Seats', kind: 'text', placeholder: 'e.g. 228-231, or Standing' },
-        { key: 'email', label: 'Email used', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
-        { key: 'orderNumber', label: 'Order ID', kind: 'text', placeholder: 'e.g. 74784' },
+        { key: 'item', label: 'Event / artist', kind: 'text', placeholder: 'e.g. Imagine Dragons', required: true },
+        { key: 'artist', label: 'Artist / team', kind: 'text', placeholder: 'optional, if different from above' },
         { key: 'ticketType', label: 'Ticket type', kind: 'text', placeholder: 'e.g. Mobile Transfer' },
-        { key: 'cardUsed', label: 'Card used', kind: 'select', options: function(){ return lists.cards; } },
-        { key: 'paidBackInitial', label: 'Paid back initial?', kind: 'checkbox' }
+        { key: 'eventDate', label: 'Event date', kind: 'date' },
+        { key: 'venue', label: 'Venue', kind: 'text', placeholder: 'e.g. Tottenham Hotspurs Stadium' },
+        { key: 'block', label: 'Block', kind: 'text', placeholder: 'e.g. B' },
+        { key: 'row', label: 'Row', kind: 'text', placeholder: 'e.g. 73' },
+        { key: 'seats', label: 'Seat(s)', kind: 'text', placeholder: 'e.g. 228-231, or Standing' },
+        { key: 'imageUrl', label: 'Image link (optional)', kind: 'text', placeholder: 'Paste an image address' },
+
+        { key: 'purchaseSection', label: 'The purchase', kind: 'section' },
+        { key: 'qty', label: 'Tickets', kind: 'number', placeholder: '1', default: '1' },
+        { key: 'price', label: 'What you paid (per ticket)', kind: 'number', placeholder: '0.00', step: '0.01', required: true },
+        { key: 'purchasedOn', label: 'Purchase date', kind: 'date' },
+        { key: 'boughtFrom', label: 'Bought from', kind: 'select', options: function(){ return lists.platforms; } },
+        { key: 'orderNumber', label: 'Order / booking reference', kind: 'text', placeholder: 'optional' },
+        { key: 'faceValue', label: 'Face value (optional)', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'expectedSellPrice', label: 'Expected sell price (optional)', kind: 'number', placeholder: '0.00', step: '0.01' },
+
+        { key: 'statusSection', label: 'Where are the tickets?', kind: 'section' },
+        { key: 'status', label: 'Status', kind: 'select', options: ['Not issued yet','In hand','Listed for sale'], default: 'In hand' },
+
+        { key: 'paperworkSection', label: 'The paperwork', kind: 'section' },
+        { key: 'email', label: 'Email', kind: 'combobox', placeholder: 'Search email accounts, or type a new one...', comboSource: 'emails', comboEmptyLabel: '— no email —' },
+        { key: 'cardUsed', label: 'Paid with', kind: 'select', options: function(){ return lists.cards; } },
+        { key: 'bookingFee', label: 'Booking / delivery fee', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'bookingFees', label: 'Booking fees', kind: 'number', placeholder: '0.00', step: '0.01' },
+        { key: 'paidBackInitial', label: 'Paid back to personal account?', kind: 'checkbox' },
+        { key: 'notes', label: 'Notes', kind: 'text', placeholder: 'Anything worth remembering about this booking...' }
       ]
     }
   };
@@ -5966,6 +6105,9 @@
 
     var fieldsEl = document.getElementById('modalFields');
     fieldsEl.innerHTML = activeModalConfig.fields.map(function(f){
+      if(f.kind === 'section'){
+        return '<div class="modal-section-label">'+escapeHtml(f.label)+'</div>';
+      }
       var existingVal = existingEntry ? existingEntry[f.key] : undefined;
       var inputHtml;
       if(f.kind === 'select'){
@@ -6018,6 +6160,45 @@
       );
       wireSaleBundleUI();
       renderSaleBundleRows();
+    }
+
+    // Ticket modal only: an integrated "the sale" section. Marking a ticket
+    // Sold here creates/updates one real linked type:'sale' entry behind the
+    // scenes (matchedItem = its TKT-XXX id, via the same getTicketId() link
+    // used everywhere else) — so it's counted in Sales/Analytics/Tax/P&L
+    // exactly like any other sale, with none of those call sites touched.
+    if(configKey === 'ticket'){
+      var linkedSale = existingEntry ? linkedSaleForTicket(existingEntry.id) : null;
+      var isSold = !!linkedSale;
+      var platformOptions = (typeof lists !== 'undefined' && lists.platforms ? lists.platforms : []).map(function(p){
+        return '<option value="'+escapeAttr(p)+'"'+(linkedSale && linkedSale.platform===p?' selected':'')+'>'+escapeHtml(p)+'</option>';
+      }).join('');
+      fieldsEl.insertAdjacentHTML('beforeend',
+        '<div class="modal-section-label">The sale</div>' +
+        '<div class="seg" id="ticketSoldToggle" style="width:fit-content;margin-bottom:12px;">' +
+          '<button type="button" class="seg-btn'+(!isSold?' active':'')+'" data-ticket-sold="0">Not sold</button>' +
+          '<button type="button" class="seg-btn'+(isSold?' active':'')+'" data-ticket-sold="1">Sold</button>' +
+        '</div>' +
+        '<div id="ticketSaleFields" style="display:'+(isSold?'block':'none')+';">' +
+          '<div class="modal-field-row">' +
+            '<div class="modal-field"><label>Sold for (per ticket) *</label><input type="number" id="ticketSoldPrice" step="0.01" placeholder="0.00" value="'+escapeAttr(linkedSale?linkedSale.price:'')+'"></div>' +
+            '<div class="modal-field"><label>Sold date</label><div class="date-wrap"><input type="text" class="date-input" data-modal-field="ticketSoldDate" data-value="'+escapeAttr(linkedSale?linkedSale.date:'')+'" readonly value="'+escapeAttr(linkedSale&&linkedSale.date?fmtDateUK(linkedSale.date):'')+'" placeholder="Select a date"><div class="date-calendar" data-calendar="ticketSoldDate"></div></div></div>' +
+          '</div>' +
+          '<div class="modal-field"><label>Sold on</label><select id="ticketSoldPlatform"><option value="">—</option>'+platformOptions+'</select></div>' +
+          '<div class="modal-field"><label>Selling fees</label><input type="number" id="ticketSellingFees" step="0.01" placeholder="0.00" value="'+escapeAttr(linkedSale?(linkedSale.sellingFees||0):0)+'"></div>' +
+          '<div class="modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--text-primary);font-size:13px;"><input type="checkbox" id="ticketPayoutReceived" style="width:auto;"'+(linkedSale&&linkedSale.payoutReceived?' checked':'')+'> Money received (paid out)</label></div>' +
+          '<div class="modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--text-primary);font-size:13px;"><input type="checkbox" id="ticketTransferred" style="width:auto;"'+(linkedSale&&linkedSale.ticketsTransferred?' checked':'')+'> Tickets transferred to buyer</label></div>' +
+        '</div>'
+      );
+      var _ticketSoldSeg = document.getElementById('ticketSoldToggle');
+      var _ticketSaleFields = document.getElementById('ticketSaleFields');
+      _ticketSoldSeg.querySelectorAll('.seg-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          _ticketSoldSeg.querySelectorAll('.seg-btn').forEach(function(b){ b.classList.remove('active'); });
+          this.classList.add('active');
+          _ticketSaleFields.style.display = this.getAttribute('data-ticket-sold') === '1' ? 'block' : 'none';
+        });
+      });
     }
 
     wireModalComboboxes();
@@ -6359,6 +6540,13 @@
     if(configKeys.expectedSellPrice) row.expectedSellPrice = parseFloat(values.expectedSellPrice) || 0;
     if(configKeys.paidBackInitial) row.paidBackInitial = !!values.paidBackInitial;
     if(configKeys.paidStatus) row.paidStatus = !!values.paidStatus;
+    if(configKeys.artist) row.artist = values.artist || '';
+    if(configKeys.block) row.block = values.block || '';
+    if(configKeys.boughtFrom) row.boughtFrom = values.boughtFrom || '';
+    if(configKeys.faceValue) row.faceValue = values.faceValue ? parseFloat(values.faceValue) || 0 : 0;
+    if(configKeys.bookingFee) row.bookingFee = values.bookingFee ? parseFloat(values.bookingFee) || 0 : 0;
+    if(configKeys.bookingFees) row.bookingFees = values.bookingFees ? parseFloat(values.bookingFees) || 0 : 0;
+    if(configKeys.imageUrl) row.imageUrl = values.imageUrl || '';
 
     if(configKeys.purchasedOn && values.purchasedOn){
       row.purchasedOn = parseDateSafe(values.purchasedOn);
@@ -6414,10 +6602,21 @@
           if(bundleRows.length) existing.extraLinkedItems = bundleRows;
           else delete existing.extraLinkedItems;
         }
+        if(activeModalConfig === MODAL_CONFIGS.ticket) applyTicketSaleFromModal(existing);
         saveEntries();
         renderAll();
         showToast('Changes saved.');
       }
+    } else if(activeModalConfig === MODAL_CONFIGS.ticket){
+      // Tickets bypass commitRows()'s duplicate-review dialog: buying more
+      // than one batch for the same event/date/price is a normal real
+      // scenario here, not a mistake to flag.
+      var newTicket = buildEntryObject(row);
+      entries.push(newTicket);
+      applyTicketSaleFromModal(newTicket);
+      saveEntries();
+      renderAll();
+      showToast('Added to tickets.');
     } else {
       if(bundleRows && bundleRows.length) row.extraLinkedItems = bundleRows;
       commitRows([row]);
@@ -7665,13 +7864,19 @@
 
   document.getElementById('invSearch').addEventListener('input', renderInventoryPage);
 
-  document.querySelectorAll('#page-inventory .tab[data-inv-subtab]').forEach(function(tab){
+  // Tickets page: Overview (cards) / Table view toggle.
+  document.querySelectorAll('#page-tickets .inv-view-tab[data-ticketsview]').forEach(function(tab){
     tab.addEventListener('click', function(){
-      var key = this.getAttribute('data-inv-subtab');
-      document.querySelectorAll('#page-inventory .tab[data-inv-subtab]').forEach(function(t){ t.classList.remove('active'); });
-      document.querySelectorAll('.inv-subtab-content').forEach(function(c){ c.classList.remove('active'); });
-      this.classList.add('active');
-      document.querySelector('.inv-subtab-content[data-inv-subtab="'+key+'"]').classList.add('active');
+      var key = this.getAttribute('data-ticketsview');
+      document.querySelectorAll('#page-tickets .inv-view-tab[data-ticketsview]').forEach(function(t){
+        t.classList.toggle('active', t === this);
+        t.style.background = t === this ? 'var(--indigo)' : 'transparent';
+        t.style.color = t === this ? '#fff' : 'var(--text-secondary)';
+      }, this);
+      document.getElementById('ticketsCardsView').style.display = key === 'cards' ? 'block' : 'none';
+      document.getElementById('ticketsTableView').style.display = key === 'table' ? 'block' : 'none';
+      if(key === 'table') renderTicketsTable();
+      else renderTicketsPage();
     });
   });
   // invStatusFilter, _invView, _invGroupBy are initialized earlier (before loadUIState) so persistence works.
@@ -8642,7 +8847,7 @@
 
   // ---------- Tickets sub-tab ----------
   function renderTicketsTable(){
-    var tab = document.getElementById('page-inventory');
+    var tab = document.getElementById('page-tickets');
     if(!tab) return;
     var searchEl = document.getElementById('ticketsSearch');
     if(!searchEl) return;
@@ -8760,7 +8965,165 @@
     });
   }
 
-  document.getElementById('ticketsSearch').addEventListener('input', renderTicketsTable);
+  // ---------- Tickets page: Overview (cards) ----------
+  // Same underlying entries as renderTicketsTable() (type:'ticket', plus
+  // their linked type:'sale' entries via linkedSaleForTicket/getTicketId) —
+  // just summarised into the stat cards / grouped list / payout panels that
+  // match the reference mockup, instead of a flat table.
+  function renderTicketsPage(){
+    var tab = document.getElementById('page-tickets');
+    if(!tab) return;
+    var statRow = document.getElementById('ticketsStatRow');
+    if(!statRow) return; // table-only build, or page not present — nothing to do
+
+    var search = ((document.getElementById('ticketsSearch')||{}).value || '').toLowerCase();
+    var tickets = entries.filter(function(e){ return e.type === 'ticket'; });
+    if(search){
+      tickets = tickets.filter(function(e){
+        return String(e.item||'').toLowerCase().indexOf(search) !== -1 ||
+          String(e.venue||'').toLowerCase().indexOf(search) !== -1 ||
+          String(e.seats||'').toLowerCase().indexOf(search) !== -1;
+      });
+    }
+
+    // One row of derived numbers per ticket batch, computed once and shared
+    // by every panel below.
+    var rows = tickets.map(function(e){
+      var soldQty = soldQtyForTicketBatch(e.id);
+      var remaining = Math.max(0, e.qty - soldQty);
+      var sale = linkedSaleForTicket(e.id);
+      var netSale = sale ? (sale.price * sale.qty - (sale.sellingFees || 0)) : null;
+      var potential = (e.expectedSellPrice > 0 && remaining > 0) ? (e.expectedSellPrice - e.price) * remaining : null;
+      return { e: e, soldQty: soldQty, remaining: remaining, sale: sale, netSale: netSale, potential: potential };
+    });
+
+    var inHandRows = rows.filter(function(r){ return r.remaining > 0; });
+    var inHandUnits = inHandRows.reduce(function(s,r){ return s + r.remaining; }, 0);
+    var inHandInvested = inHandRows.reduce(function(s,r){ return s + r.remaining * r.e.price; }, 0);
+
+    var potentialRows = inHandRows.filter(function(r){ return r.potential !== null; });
+    var potentialTotal = potentialRows.reduce(function(s,r){ return s + r.potential; }, 0);
+
+    var soldRows = rows.filter(function(r){ return r.sale; });
+    var awaitingRows = soldRows.filter(function(r){ return !r.sale.payoutReceived; });
+    var paidRows = soldRows.filter(function(r){ return r.sale.payoutReceived; });
+    var awaitingTotal = awaitingRows.reduce(function(s,r){ return s + r.netSale; }, 0);
+    var paidTotal = paidRows.reduce(function(s,r){ return s + r.netSale; }, 0);
+
+    // ----- Stat cards -----
+    statRow.innerHTML = [
+      { label: 'In hand', value: inHandUnits, sub: fmtMoney(inHandInvested)+' invested', color: 'var(--indigo)', bg: 'var(--indigo-dim)' },
+      { label: 'Potential profit', value: fmtMoney(potentialTotal),
+        sub: potentialRows.length ? null : 'add an expected sell price to a ticket to see this',
+        color: potentialTotal>0?'var(--green)':'var(--text-muted)', bg: potentialTotal>0?'var(--green-dim)':'var(--surface-2)' },
+      { label: 'Awaiting payout', value: fmtMoney(awaitingTotal),
+        sub: awaitingRows.length ? (awaitingRows.length+' ticket'+(awaitingRows.length===1?'':'s')+' sold, not paid out yet') : 'nothing sold yet — mark a ticket Sold when it goes',
+        color: awaitingTotal>0?'var(--amber)':'var(--text-muted)', bg: awaitingTotal>0?'var(--amber-dim)':'var(--surface-2)' },
+      { label: 'Paid out', value: fmtMoney(paidTotal),
+        sub: paidRows.length+' settled — after fees, landed in your bank', color: 'var(--green)', bg: 'var(--green-dim)' }
+    ].map(function(c){
+      return '<div class="stat-card"><div class="icon" style="background:'+c.bg+';color:'+c.color+';"></div><div class="label">'+c.label+'</div><div class="value">'+c.value+'</div>'+(c.sub?'<div class="sub">'+c.sub+'</div>':'')+'</div>';
+    }).join('');
+
+    // ----- In hand list — unsold batches only, grouped by event, nearest first -----
+    var badgeEl = document.getElementById('ticketsInHandCountBadge');
+    if(badgeEl) badgeEl.textContent = inHandRows.length;
+
+    var inHandWrap = document.getElementById('ticketsInHandWrap');
+    if(inHandWrap){
+      var sortedInHand = inHandRows.slice().sort(function(a,b){
+        return (a.e.eventDate||'9999-99-99').localeCompare(b.e.eventDate||'9999-99-99');
+      });
+      if(!sortedInHand.length){
+        inHandWrap.innerHTML = '<div class="empty-state"><div class="icon-big">🎟</div>No tickets in hand. Add one to get started, or switch to Table view to see everything.</div>';
+      } else {
+        inHandWrap.innerHTML = sortedInHand.map(function(r){
+          var e = r.e;
+          var statusLabel = e.status || 'In hand';
+          var badgeCls = statusLabel === 'Listed for sale' ? 'badge-stock' : 'badge-in';
+          var seatBits = [e.block?('Block '+e.block):'', e.row?('Row '+e.row):'', e.seats?('Seat '+e.seats):''].filter(Boolean).join(' · ');
+          var subParts = [e.venue, seatBits].filter(Boolean);
+          var actionHtml = r.sale
+            ? '<span style="font-size:12px;color:var(--text-muted);">partially sold</span>'
+            : '<button class="btn" style="padding:4px 10px;font-size:12px;" data-mark-sold="'+e.id+'">Sold</button>';
+          return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                '<span style="font-weight:600;font-size:13px;">'+escapeHtml(e.item)+'</span>' +
+                '<span class="badge '+badgeCls+'">'+escapeHtml(statusLabel)+'</span>' +
+              '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+(e.eventDate?fmtDateUK(e.eventDate):'no event date')+(subParts.length?(' · '+escapeHtml(subParts.join(' · '))):'')+'</div>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:600;">'+fmtMoney(e.price)+'</div>' +
+            actionHtml +
+            '<button class="btn" style="padding:4px 8px;font-size:12px;" data-edit-ticket-card="'+e.id+'">✎</button>' +
+          '</div>';
+        }).join('');
+
+        inHandWrap.querySelectorAll('[data-edit-ticket-card], [data-mark-sold]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            var id = this.getAttribute('data-edit-ticket-card') || this.getAttribute('data-mark-sold');
+            var entry = entries.find(function(x){ return x.id === id; });
+            if(entry) openAddModal('ticket', entry);
+          });
+        });
+      }
+    }
+
+    // ----- Where the money is: paid-out totals grouped by platform -----
+    var whereWrap = document.getElementById('ticketsWhereMoneyWrap');
+    if(whereWrap){
+      var byPlatform = {};
+      paidRows.forEach(function(r){
+        var p = r.sale.platform || 'Other';
+        byPlatform[p] = (byPlatform[p] || 0) + r.netSale;
+      });
+      var platforms = Object.keys(byPlatform).sort(function(a,b){ return byPlatform[b]-byPlatform[a]; });
+      if(!platforms.length){
+        whereWrap.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">No payouts recorded yet.</div>';
+      } else {
+        whereWrap.innerHTML = platforms.map(function(p){
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
+            '<span>'+escapeHtml(p)+'</span>' +
+            '<span style="color:var(--green);font-weight:600;">paid '+fmtMoney(byPlatform[p])+'</span>' +
+          '</div>';
+        }).join('');
+      }
+    }
+
+    // ----- Paid out list -----
+    var paidBadge = document.getElementById('ticketsPaidOutCountBadge');
+    if(paidBadge) paidBadge.textContent = paidRows.length;
+    var paidWrap = document.getElementById('ticketsPaidOutWrap');
+    if(paidWrap){
+      var sortedPaid = paidRows.slice().sort(function(a,b){ return (b.sale.date||'').localeCompare(a.sale.date||''); });
+      if(!sortedPaid.length){
+        paidWrap.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0;">Nothing paid out yet.</div>';
+      } else {
+        paidWrap.innerHTML = sortedPaid.map(function(r){
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">' +
+            '<div>' +
+              '<div style="font-size:13px;font-weight:600;">'+escapeHtml(r.e.item)+'</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">paid '+(r.sale.date?fmtDateUK(r.sale.date):'—')+'</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="font-size:13px;font-weight:600;">'+fmtMoney(r.netSale)+'</span>' +
+              '<button class="btn" style="padding:3px 8px;font-size:11px;" data-edit-ticket-card="'+r.e.id+'">✎</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+        paidWrap.querySelectorAll('[data-edit-ticket-card]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            var id = this.getAttribute('data-edit-ticket-card');
+            var entry = entries.find(function(x){ return x.id === id; });
+            if(entry) openAddModal('ticket', entry);
+          });
+        });
+      }
+    }
+  }
+
+  document.getElementById('ticketsSearch').addEventListener('input', function(){ renderTicketsTable(); renderTicketsPage(); });
   document.getElementById('addTicketBtn').addEventListener('click', function(){ openAddModal('ticket'); });
 
   document.getElementById('addIncomeBtn').addEventListener('click', function(){ openAddModal('income'); });
@@ -9784,7 +10147,7 @@
     if(!results.length){ globalResultsEl.style.display='none'; return; }
 
     var TYPE_ICON = { purchase:'📦', sale:'💰', expense:'💸', income:'↗', ticket:'🎟' };
-    var TYPE_PAGE = { purchase:'orders', sale:'sales', expense:'expenses', income:'income', ticket:'inventory' };
+    var TYPE_PAGE = { purchase:'orders', sale:'sales', expense:'expenses', income:'income', ticket:'tickets' };
 
     globalResultsEl.innerHTML = results.map(function(e){
       var icon = TYPE_ICON[e.type] || '·';
