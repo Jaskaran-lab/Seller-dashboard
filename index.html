@@ -1071,6 +1071,7 @@
     <div class="nav-item" data-page="orders"><span class="ic">▤</span> Orders</div>
     <div class="nav-item" data-page="sales"><span class="ic">£</span> Sales</div>
     <div class="nav-item" data-page="tickets"><span class="ic">🎟</span> Tickets</div>
+    <div class="nav-item" data-page="whisky"><span class="ic">🥃</span> Whisky Auctions</div>
     <div class="nav-item" data-page="inventory"><span class="ic">▣</span> Inventory</div>
     <div class="nav-item" data-page="preorders"><span class="ic">◷</span> Pre-Orders</div>
     <div class="nav-item" data-page="expenses"><span class="ic">⊟</span> Expenses</div>
@@ -1083,7 +1084,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.54</span>
+    <span class="version-pill">v0.55</span>
   </div>
 </div>
 
@@ -1192,6 +1193,8 @@
     </div>
 
     <div class="stat-row" id="analyticsStatRow"></div>
+
+    <div id="analyticsWhiskySection"></div>
 
     <div class="panel">
       <div class="panel-head">
@@ -1352,6 +1355,7 @@
           <button class="seg-btn" data-platform="Viagogo">Viagogo</button>
           <button class="seg-btn" data-platform="StubHub">StubHub</button>
           <button class="seg-btn" data-platform="Direct Sale">Direct</button>
+          <button class="seg-btn" data-platform="Scotch Whisky Auctions">Whisky</button>
           <button class="seg-btn" data-platform="Other">Other</button>
         </div>
       </div>
@@ -1433,6 +1437,28 @@
         </div>
         <div id="ticketsTableWrap"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-whisky">
+    <div class="page-header">
+      <div><h1>Whisky Auctions</h1><p>Payouts from Scotch Whisky Auctions — each one counts as sales revenue in Sales, Analytics and Tax</p></div>
+      <div class="header-right">
+        <input type="text" id="whiskySearch" placeholder="Search auctions..." style="max-width:220px;">
+        <button class="btn btn-primary" id="addWhiskyPayoutBtn">+ Add payout</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="whiskyStatRow" style="grid-template-columns: repeat(4, 1fr);"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Payouts</h2>
+          <span class="sub" id="whiskyCountSub">0 payouts</span>
+        </div>
+      </div>
+      <div id="whiskyTableWrap"></div>
     </div>
   </div>
 
@@ -2966,6 +2992,7 @@
     { key: 'orders', label: 'Orders' },
     { key: 'sales', label: 'Sales' },
     { key: 'tickets', label: 'Tickets' },
+    { key: 'whisky', label: 'Whisky Auctions' },
     { key: 'inventory', label: 'Inventory' },
     { key: 'preorders', label: 'Pre-Orders' },
     { key: 'expenses', label: 'Expenses' },
@@ -3342,6 +3369,7 @@
       '</div>';
     }).join('');
 
+    renderAnalyticsWhisky(sales, s, rangeLabel);
     renderAnalyticsRevenueProfitChart(sales);
     renderAnalyticsWeeklyTrendChart(sales, purchases);
     renderAnalyticsOrderStatus(purchases);
@@ -4493,6 +4521,7 @@
     renderInventoryPage();
     renderTicketsTable();
     renderTicketsPage();
+    renderWhiskyPage();
     renderSalesTable();
     renderPreordersTable();
     renderExpensesTable();
@@ -5450,6 +5479,7 @@
 
   // ---------- Managed lists (Retailers, Brands, Emails, Banks & Cards, Sales Platforms) ----------
   var LISTS_KEY = 'inventory:managedLists';
+  var WHISKY_PAYOUT_PLATFORM = 'Scotch Whisky Auctions';
   var LIST_DEFS = [
     { key: 'retailers', label: 'Retailers', placeholder: 'e.g. waterstones.co.uk' },
     { key: 'brands', label: 'Brands', placeholder: 'e.g. Pokemon, Topps, Nike' },
@@ -5462,7 +5492,7 @@
     brands: [],
     emails: ['personal1@gmail.com','business@gmail.com','backup@gmail.com','catchall@domain.com','orders@domain.com','In Store'],
     cards: ['Personal Card','Business Card'],
-    platforms: ['eBay','Viagogo','StubHub','Direct Sale','Other']
+    platforms: ['eBay','Viagogo','StubHub','Scotch Whisky Auctions','Direct Sale','Other']
   };
   var lists = JSON.parse(JSON.stringify(DEFAULT_LISTS));
 
@@ -5474,6 +5504,14 @@
       if(res && res.value){
         var loaded = JSON.parse(res.value);
         lists = Object.assign(JSON.parse(JSON.stringify(DEFAULT_LISTS)), loaded);
+      }
+      // Whisky payouts are saved as sales on this platform — make sure it's
+      // always selectable even for a saved list from before it existed, so
+      // editing one of those sales never blanks its platform.
+      if(Array.isArray(lists.platforms) && lists.platforms.indexOf(WHISKY_PAYOUT_PLATFORM) === -1){
+        var _otherIdx = lists.platforms.indexOf('Other');
+        if(_otherIdx === -1) lists.platforms.push(WHISKY_PAYOUT_PLATFORM);
+        else lists.platforms.splice(_otherIdx, 0, WHISKY_PAYOUT_PLATFORM);
       }
       listsLoadedSuccessfully = true;
     } catch(e){
@@ -5976,6 +6014,21 @@
         { key: 'notes',      label: 'Notes',         kind: 'text',     placeholder: 'Optional notes...' }
       ]
     },
+    // A Scotch Whisky Auctions payout is stored as a normal type:'sale' entry
+    // (platform = WHISKY_PAYOUT_PLATFORM, whiskyPayout: true), so it flows into
+    // Revenue/Profit on Dashboard + Analytics, the Sales list, the VAT tracker
+    // and Tax P&L turnover through exactly the same code as every other sale.
+    whiskyPayout: {
+      title: 'Add whisky auction payout',
+      type: 'sale',
+      fields: [
+        { key: 'date', label: 'Payout date', kind: 'date', required: true, defaultToday: true },
+        { key: 'auctionName', label: 'Auction', kind: 'text', placeholder: 'e.g. October 2026 Auction', required: true },
+        { key: 'price', label: 'Amount paid out (£)', kind: 'number', placeholder: '0.00', step: '0.01', required: true },
+        { key: 'lots', label: 'Lots sold (optional)', kind: 'number', placeholder: 'e.g. 4' },
+        { key: 'notes', label: 'Notes', kind: 'text', placeholder: '—' }
+      ]
+    },
     income: {
       title: 'Add income',
       type: 'income',
@@ -6096,6 +6149,8 @@
   }
 
   function openAddModal(configKey, existingEntry){
+    // Editing a whisky payout from the Sales page opens its own form.
+    if(configKey === 'sale' && existingEntry && existingEntry.whiskyPayout) configKey = 'whiskyPayout';
     activeModalConfig = MODAL_CONFIGS[configKey];
     if(!activeModalConfig) return;
     editingEntryId = existingEntry ? existingEntry.id : null;
@@ -6126,7 +6181,7 @@
           '<div class="combo-list" data-modal-combo="'+f.key+'"></div>' +
         '</div>';
       } else if(f.kind === 'date'){
-        var dateVal = existingVal || '';
+        var dateVal = existingVal || ((!existingEntry && f.defaultToday) ? todayISO() : '');
         inputHtml = '<div class="date-wrap">' +
           '<input type="text" class="date-input" data-modal-field="'+f.key+'" data-value="'+escapeAttr(dateVal)+'" readonly value="'+escapeAttr(dateVal ? fmtDateUK(dateVal) : '')+'" placeholder="Select a date">' +
           '<div class="date-calendar" data-calendar="'+f.key+'"></div>' +
@@ -6585,6 +6640,36 @@
       });
       if(_oversold.length){
         showToast('Oversold — ' + _oversold.join('; ') + '. Saved anyway; check if the purchase/order still needs logging.', true);
+      }
+    }
+
+    if(activeModalConfig === MODAL_CONFIGS.whiskyPayout){
+      var _payoutAmt = parseFloat(values.price);
+      if(!(_payoutAmt > 0)){ showToast('Enter the amount you were paid out.', true); return; }
+      var _auction = String(values.auctionName || '').trim();
+      row.item = WHISKY_PAYOUT_PLATFORM + ' — ' + _auction;
+      row.qty = 1;
+      row.price = _payoutAmt;
+      row.platform = WHISKY_PAYOUT_PLATFORM;
+      row.status = 'Sold';
+      row.matchedItem = null;
+      row.postage = 0;
+      row.postageCharged = 0;
+      row.paidStatus = true;
+      row.whiskyPayout = true;
+      row.auctionName = _auction;
+      row.lots = values.lots ? (parseInt(values.lots, 10) || 0) : 0;
+      if(!editingEntryId){
+        var _newPayout = buildEntryObject(row);
+        _newPayout.whiskyPayout = true;
+        _newPayout.auctionName = row.auctionName;
+        _newPayout.lots = row.lots;
+        entries.push(_newPayout);
+        saveEntries();
+        renderAll();
+        showToast('Payout added — counted in Sales, Analytics and Tax.');
+        closeAddModal();
+        return;
       }
     }
 
@@ -7501,7 +7586,7 @@
       },
       columns: [
         { key:'item',           label:'Product',         type:'text' },
-        { key:'platform',       label:'Sell Platform',   type:'select', options:['eBay','Viagogo','StubHub','Direct Sale','Other'] },
+        { key:'platform',       label:'Sell Platform',   type:'select', options:['eBay','Viagogo','StubHub','Scotch Whisky Auctions','Direct Sale','Other'] },
         { key:'date',           label:'Sell Date',       type:'date' },
         { key:'price',          label:'Sell Price',      type:'number' },
         { key:'qty',            label:'Qty',             type:'number' },
@@ -8728,6 +8813,17 @@
   document.getElementById('expensesCategoryFilter').addEventListener('change', renderExpensesTable);
 
   document.getElementById('exportExpensesBtn').addEventListener('click', function(){
+    var expenses = entries.filter(function(e){ return e.type === 'expense'; });
+    var csv = ['Date,Item,Category,Type,Qty,Amount,Card,Notes'];
+    expenses.forEach(function(e){
+      csv.push([e.date, e.item, e.category||'', e.recurrence||'One-off', e.qty||1, (e.qty||1)*(e.price||0), e.cardUsed||'', e.notes||''].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','));
+    });
+    var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'expenses-'+todayISO()+'.csv';
+    a.click();
+  });
 
   // Tax page controls
   document.getElementById('taxYearSelect').addEventListener('change', renderTaxPage);
@@ -8764,19 +8860,128 @@
     a.download = 'tax-summary-' + yearLabel + '.csv';
     a.click();
   });
-    var expenses = entries.filter(function(e){ return e.type === 'expense'; });
-    var csv = ['Date,Item,Category,Type,Qty,Amount,Card,Notes'];
-    expenses.forEach(function(e){
-      csv.push([e.date, e.item, e.category||'', e.recurrence||'One-off', e.qty||1, (e.qty||1)*(e.price||0), e.cardUsed||'', e.notes||''].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','));
-    });
-    var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'expenses-'+todayISO()+'.csv';
-    a.click();
-  });
 
   // ---------- Income tab ----------
+  // ---------- Whisky Auctions (Scotch Whisky Auctions payouts) ----------
+  function isWhiskyPayout(e){
+    return e && e.type === 'sale' && (e.whiskyPayout || e.platform === WHISKY_PAYOUT_PLATFORM);
+  }
+
+  function whiskyStatCard(label, value, sub, color, hex){
+    return '<div class="stat-card" style="position:relative;overflow:hidden;border-top:2px solid '+color+';background:linear-gradient(135deg, '+hex+'0d 0%, transparent 60%);">' +
+      '<div class="label">'+label+'</div>' +
+      '<div class="value" style="color:'+color+';">'+value+'</div>' +
+      (sub ? '<div class="sub">'+sub+'</div>' : '') +
+    '</div>';
+  }
+
+  function renderWhiskyPage(){
+    var page = document.getElementById('page-whisky');
+    if(!page) return;
+
+    var all = entries.filter(function(e){ return isWhiskyPayout(e) && e.status !== 'Cancelled'; });
+    var total = all.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
+    var lotsTotal = all.reduce(function(s,e){ return s + (parseInt(e.lots,10) || 0); }, 0);
+    var latest = all.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); })[0];
+
+    document.getElementById('whiskyStatRow').innerHTML = [
+      whiskyStatCard('Total paid out', fmtMoney(total), 'All time', 'var(--green)', '#2dd4a0'),
+      whiskyStatCard('Payouts', all.length, lotsTotal ? (lotsTotal + ' lot' + (lotsTotal===1?'':'s') + ' sold') : 'Auctions paid out', 'var(--indigo)', '#6d6df0'),
+      whiskyStatCard('Average payout', fmtMoney(all.length ? total / all.length : 0), 'Per auction', 'var(--violet)', '#b78cf2'),
+      whiskyStatCard('Latest payout', latest ? fmtMoney(saleRevenue(latest)) : '—', latest ? (fmtDateUK(latest.date) + ' · ' + escapeHtml(latest.auctionName || '')) : 'None yet', 'var(--amber)', '#f0b35c')
+    ].join('');
+
+    var search = (document.getElementById('whiskySearch').value || '').toLowerCase();
+    var list = entries.filter(isWhiskyPayout);
+    if(search){
+      list = list.filter(function(e){
+        return (String(e.auctionName||'') + ' ' + String(e.item||'') + ' ' + String(e.notes||'')).toLowerCase().indexOf(search) !== -1;
+      });
+    }
+    list = applySortState('whisky', list, {
+      date: function(a,b){ return compareText(a.date,b.date); },
+      auction: function(a,b){ return compareText(a.auctionName||a.item, b.auctionName||b.item); },
+      lots: function(a,b){ return compareNumber(parseInt(a.lots,10), parseInt(b.lots,10)); },
+      amount: function(a,b){ return compareNumber(saleRevenue(a), saleRevenue(b)); }
+    });
+    if(!tableSortState.whisky || !tableSortState.whisky.key) list = list.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+
+    var shownTotal = list.filter(function(e){ return e.status !== 'Cancelled'; }).reduce(function(s,e){ return s + saleRevenue(e); }, 0);
+    document.getElementById('whiskyCountSub').innerHTML = list.length + ' payout' + (list.length===1?'':'s') + ' · ' + fmtMoney(shownTotal) + ' total';
+
+    var wrap = document.getElementById('whiskyTableWrap');
+    if(!list.length){
+      wrap.innerHTML = '<div class="empty-state"><div class="icon-big">🥃</div>' + (search ? 'No payouts match your search.' : 'No payouts logged yet — click “+ Add payout” to record one.') + '</div>';
+      return;
+    }
+
+    var headerRow = buildSortableHeader('whisky', [
+      { label: 'Payout date', sortKey: 'date' },
+      { label: 'Auction', sortKey: 'auction' },
+      { label: 'Lots', sortKey: 'lots', cls: 'right' },
+      { label: 'Amount paid out', sortKey: 'amount', cls: 'right' },
+      { label: 'Notes' },
+      { label: '' }
+    ]);
+
+    var tableHtml = '<table><thead>' + headerRow + '</thead><tbody>' +
+      list.map(function(e){
+        var cancelled = e.status === 'Cancelled';
+        return '<tr'+(cancelled?' style="opacity:0.5;"':'')+'>' +
+          '<td>'+fmtDateUK(e.date)+'</td>' +
+          '<td>'+escapeHtml(e.auctionName || e.item || '—')+(cancelled?' <span class="badge" style="margin-left:4px;">Cancelled</span>':'')+'</td>' +
+          '<td class="right">'+(parseInt(e.lots,10) ? parseInt(e.lots,10) : '—')+'</td>' +
+          '<td class="right">'+fmtMoney(saleRevenue(e))+'</td>' +
+          '<td>'+escapeHtml(e.notes || '—')+'</td>' +
+          '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-whisky="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.auctionName || e.item)+'">Delete</button></td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+
+    wrap.innerHTML = wrapTableForDisplay('whisky', 'Whisky Auction Payouts', tableHtml);
+    wireSortableHeaders(wrap, renderWhiskyPage);
+    wireMaximizeButtons(wrap);
+    TABLE_RERENDER_FNS.whisky = renderWhiskyPage;
+
+    wrap.querySelectorAll('[data-edit-whisky]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-edit-whisky');
+        var entry = entries.find(function(e){ return e.id === id; });
+        if(entry) openAddModal('whiskyPayout', entry);
+      });
+    });
+    wrap.querySelectorAll('[data-delete-entry]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        deleteEntry(this.getAttribute('data-delete-entry'), this.getAttribute('data-delete-label'));
+      });
+    });
+  }
+
+  // Analytics panel: payouts are already inside Revenue/Profit above (they're
+  // sales); this just breaks out how much of that came from whisky auctions
+  // for the selected range.
+  function renderAnalyticsWhisky(sales, stats, rangeLabel){
+    var el = document.getElementById('analyticsWhiskySection');
+    if(!el) return;
+    var anyEver = entries.some(isWhiskyPayout);
+    if(!anyEver){ el.innerHTML = ''; return; }
+    var payouts = sales.filter(isWhiskyPayout);
+    var total = payouts.reduce(function(s,e){ return s + saleRevenue(e); }, 0);
+    var share = stats.totalSales > 0 ? (total / stats.totalSales) * 100 : 0;
+    var label = rangeLabel ? rangeLabel.charAt(0).toUpperCase() + rangeLabel.slice(1) : 'All time';
+    el.innerHTML = '<div class="panel">' +
+      '<div class="panel-head"><div><h2>🥃 Whisky Auction Payouts</h2><span class="sub">'+escapeHtml(label)+' — included in Revenue and Profit above</span></div>' +
+      '<button class="btn" id="analyticsWhiskyViewAll" style="padding:4px 10px;font-size:12px;">View all →</button></div>' +
+      '<div class="stat-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom:0;">' +
+        whiskyStatCard('Paid out', fmtMoney(total), '', 'var(--green)', '#2dd4a0') +
+        whiskyStatCard('Payouts', payouts.length, '', 'var(--indigo)', '#6d6df0') +
+        whiskyStatCard('Share of revenue', share.toFixed(1) + '%', '', 'var(--amber)', '#f0b35c') +
+      '</div>' +
+    '</div>';
+    var link = document.getElementById('analyticsWhiskyViewAll');
+    if(link) link.addEventListener('click', function(ev){ ev.preventDefault(); goToTab('whisky'); });
+  }
+
   function renderIncomeTable(){
     var tab = document.getElementById('page-income');
     if(!tab) return;
@@ -9127,6 +9332,8 @@
   document.getElementById('addTicketBtn').addEventListener('click', function(){ openAddModal('ticket'); });
 
   document.getElementById('addIncomeBtn').addEventListener('click', function(){ openAddModal('income'); });
+  document.getElementById('addWhiskyPayoutBtn').addEventListener('click', function(){ openAddModal('whiskyPayout'); });
+  document.getElementById('whiskySearch').addEventListener('input', renderWhiskyPage);
 
   document.getElementById('resetBtn').addEventListener('click', function(){
     showConfirmDialog('Clear all inventory data?', 'This removes every purchase and sale you have logged. This cannot be undone.', function(){
