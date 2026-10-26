@@ -1084,7 +1084,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.55</span>
+    <span class="version-pill">v0.56</span>
   </div>
 </div>
 
@@ -6026,6 +6026,8 @@
         { key: 'auctionName', label: 'Auction', kind: 'text', placeholder: 'e.g. October 2026 Auction', required: true },
         { key: 'price', label: 'Amount paid out (£)', kind: 'number', placeholder: '0.00', step: '0.01', required: true },
         { key: 'lots', label: 'Lots sold (optional)', kind: 'number', placeholder: 'e.g. 4' },
+        { key: 'lotsText', label: 'Lot breakdown — paste the settlement table from Scotch Whisky Auctions (optional)', kind: 'textarea',
+          placeholder: 'Lot\tHammer price\tListing fee\tReserve fee\tTax on fees\tAmount due\nSpringbank 18 Year Old (Lot no 184-01729)\t£170.00\t£8.00\t£0.00\t£1.60\t£160.40\n...' },
         { key: 'notes', label: 'Notes', kind: 'text', placeholder: '—' }
       ]
     },
@@ -6186,6 +6188,8 @@
           '<input type="text" class="date-input" data-modal-field="'+f.key+'" data-value="'+escapeAttr(dateVal)+'" readonly value="'+escapeAttr(dateVal ? fmtDateUK(dateVal) : '')+'" placeholder="Select a date">' +
           '<div class="date-calendar" data-calendar="'+f.key+'"></div>' +
         '</div>';
+      } else if(f.kind === 'textarea'){
+        inputHtml = '<textarea data-modal-field="'+f.key+'" placeholder="'+escapeAttr(f.placeholder||'')+'" style="min-height:110px;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre;">'+escapeHtml(existingVal || '')+'</textarea>';
       } else if(f.kind === 'checkbox'){
         var checked = existingEntry ? !!existingVal : false;
         inputHtml = '<input type="checkbox" data-modal-field="'+f.key+'" style="width:auto;"'+(checked?' checked':'')+'>';
@@ -6257,6 +6261,8 @@
     }
 
     wireModalComboboxes();
+    if(configKey === 'whiskyPayout') wireWhiskyLotsUI(existingEntry);
+
     wireModalDatePickers();
     document.getElementById('addEntryModal').classList.add('open');
     // HIG: move focus into modal and restore on close
@@ -6659,11 +6665,21 @@
       row.whiskyPayout = true;
       row.auctionName = _auction;
       row.lots = values.lots ? (parseInt(values.lots, 10) || 0) : 0;
+      var _parsedLots = parseWhiskyLots(values.lotsText || '');
+      if(String(values.lotsText || '').trim() && !_parsedLots.items.length){
+        showToast('Couldn\'t read any lots from the pasted table — check it has the price columns, or clear that box.', true); return;
+      }
+      row.lotItems = _parsedLots.items;
+      if(_parsedLots.items.length){
+        row.lots = _parsedLots.items.length;
+        row.price = Math.round(_parsedLots.totals.amountDue * 100) / 100;
+      }
       if(!editingEntryId){
         var _newPayout = buildEntryObject(row);
         _newPayout.whiskyPayout = true;
         _newPayout.auctionName = row.auctionName;
         _newPayout.lots = row.lots;
+        _newPayout.lotItems = row.lotItems;
         entries.push(_newPayout);
         saveEntries();
         renderAll();
@@ -8875,6 +8891,110 @@
     '</div>';
   }
 
+  // Parses the settlement table copied from Scotch Whisky Auctions:
+  //   Lot | Hammer price | Listing fee | Reserve fee | Tax on fees | Amount due
+  // Works whether the copy kept tabs or collapsed them to spaces — each lot
+  // line is "name ... then five money amounts". Header and Total lines are
+  // skipped. If Amount due is missing it's worked out from the other four.
+  function parseWhiskyLots(text){
+    var items = [];
+    var money = '£?\\s*(-?[\\d,]+(?:\\.\\d{1,2})?)';
+    var re5 = new RegExp('^(.*?)\\s+' + money + '\\s+' + money + '\\s+' + money + '\\s+' + money + '\\s+' + money + '\\s*$');
+    var re4 = new RegExp('^(.*?)\\s+' + money + '\\s+' + money + '\\s+' + money + '\\s+' + money + '\\s*$');
+    function num(v){ return parseFloat(String(v).replace(/,/g,'')) || 0; }
+    String(text || '').split(/\r?\n/).forEach(function(line){
+      line = line.replace(/ /g, ' ').trim();
+      if(!line) return;
+      if(/^total\b/i.test(line)) return;
+      if(/hammer/i.test(line) && /fee/i.test(line)) return;
+      var m = line.match(re5), m4 = m ? null : line.match(re4);
+      if(!m && !m4) return;
+      var name = (m || m4)[1].replace(/\t+/g, ' ').trim();
+      var lotNo = '';
+      var lm = name.match(/\(\s*lot\s*(?:no\.?|number|#)?\s*([^)]+)\)\s*$/i);
+      if(lm){ lotNo = lm[1].trim(); name = name.slice(0, lm.index).trim(); }
+      var hammer = num((m||m4)[2]), listingFee = num((m||m4)[3]), reserveFee = num((m||m4)[4]), taxOnFees = num((m||m4)[5]);
+      var amountDue = m ? num(m[6]) : Math.round((hammer - listingFee - reserveFee - taxOnFees) * 100) / 100;
+      items.push({ name: name, lotNo: lotNo, hammer: hammer, listingFee: listingFee, reserveFee: reserveFee, taxOnFees: taxOnFees, amountDue: amountDue });
+    });
+    return { items: items, totals: whiskyLotTotals(items) };
+  }
+
+  function whiskyLotTotals(items){
+    var t = { hammer: 0, listingFee: 0, reserveFee: 0, taxOnFees: 0, amountDue: 0 };
+    (items || []).forEach(function(it){
+      t.hammer += it.hammer || 0; t.listingFee += it.listingFee || 0; t.reserveFee += it.reserveFee || 0;
+      t.taxOnFees += it.taxOnFees || 0; t.amountDue += it.amountDue || 0;
+    });
+    Object.keys(t).forEach(function(k){ t[k] = Math.round(t[k] * 100) / 100; });
+    t.fees = Math.round((t.listingFee + t.reserveFee + t.taxOnFees) * 100) / 100;
+    return t;
+  }
+
+  // Back to the same tab-separated shape, so an existing payout's lots can be
+  // edited in the same paste box they came in through.
+  function whiskyLotsToText(items){
+    if(!items || !items.length) return '';
+    function f(n){ return '£' + (n || 0).toFixed(2); }
+    return ['Lot\tHammer price\tListing fee\tReserve fee\tTax on fees\tAmount due'].concat(items.map(function(it){
+      return (it.name + (it.lotNo ? ' (Lot no ' + it.lotNo + ')' : '')) + '\t' + f(it.hammer) + '\t' + f(it.listingFee) + '\t' + f(it.reserveFee) + '\t' + f(it.taxOnFees) + '\t' + f(it.amountDue);
+    })).join('\n');
+  }
+
+  function whiskyLotsTableHtml(items, compact){
+    var t = whiskyLotTotals(items);
+    var td = 'style="padding:6px 8px;"';
+    var tdr = 'class="right" style="padding:6px 8px;white-space:nowrap;"';
+    if(compact){
+      return '<table style="width:100%;font-size:12px;table-layout:auto;"><thead><tr><th '+td+'>Lot</th><th '+tdr+'>Hammer</th><th '+tdr+'>Fees</th><th '+tdr+'>Due</th></tr></thead><tbody>' +
+        items.map(function(it){
+          return '<tr><td style="padding:6px 8px;white-space:normal;">'+escapeHtml(it.name)+'</td><td '+tdr+'>'+fmtMoney(it.hammer)+'</td><td '+tdr+'>'+fmtMoney(it.listingFee+it.reserveFee+it.taxOnFees)+'</td><td '+tdr+'>'+fmtMoney(it.amountDue)+'</td></tr>';
+        }).join('') +
+        '<tr style="font-weight:700;"><td '+td+'>Total</td><td '+tdr+'>'+fmtMoney(t.hammer)+'</td><td '+tdr+'>'+fmtMoney(t.fees)+'</td><td '+tdr+'>'+fmtMoney(t.amountDue)+'</td></tr></tbody></table>';
+    }
+    return '<table style="width:100%;font-size:12px;"><thead><tr>' +
+        '<th '+td+'>Lot</th><th '+tdr+'>Hammer</th><th '+tdr+'>Listing fee</th><th '+tdr+'>Reserve fee</th><th '+tdr+'>Tax on fees</th><th '+tdr+'>Amount due</th>' +
+      '</tr></thead><tbody>' +
+      items.map(function(it){
+        var check = Math.round((it.hammer - it.listingFee - it.reserveFee - it.taxOnFees) * 100) / 100;
+        var off = Math.abs(check - it.amountDue) > 0.01;
+        return '<tr><td '+td+'>'+escapeHtml(it.name)+(it.lotNo ? ' <span style="color:var(--text-muted);font-size:11px;">#'+escapeHtml(it.lotNo)+'</span>' : '')+'</td>' +
+          '<td '+tdr+'>'+fmtMoney(it.hammer)+'</td><td '+tdr+'>'+fmtMoney(it.listingFee)+'</td><td '+tdr+'>'+fmtMoney(it.reserveFee)+'</td><td '+tdr+'>'+fmtMoney(it.taxOnFees)+'</td>' +
+          '<td '+tdr+'>'+fmtMoney(it.amountDue)+(off ? ' <span title="Hammer minus fees = '+check.toFixed(2)+'" style="color:var(--amber);">⚠</span>' : '')+'</td></tr>';
+      }).join('') +
+      '<tr style="font-weight:700;"><td '+td+'>Total ('+items.length+' lot'+(items.length===1?'':'s')+')</td>' +
+        '<td '+tdr+'>'+fmtMoney(t.hammer)+'</td><td '+tdr+'>'+fmtMoney(t.listingFee)+'</td><td '+tdr+'>'+fmtMoney(t.reserveFee)+'</td><td '+tdr+'>'+fmtMoney(t.taxOnFees)+'</td><td '+tdr+'>'+fmtMoney(t.amountDue)+'</td></tr>' +
+      '</tbody></table>';
+  }
+
+  // Modal: live preview of the pasted table; fills Amount + Lots from it.
+  function wireWhiskyLotsUI(existingEntry){
+    var ta = document.querySelector('#modalFields [data-modal-field="lotsText"]');
+    if(!ta) return;
+    if(existingEntry && existingEntry.lotItems && existingEntry.lotItems.length) ta.value = whiskyLotsToText(existingEntry.lotItems);
+    ta.insertAdjacentHTML('afterend', '<div id="whiskyLotsPreview" style="margin-top:8px;overflow-x:auto;"></div>');
+    var prev = document.getElementById('whiskyLotsPreview');
+    var priceEl = document.querySelector('#modalFields [data-modal-field="price"]');
+    var lotsEl = document.querySelector('#modalFields [data-modal-field="lots"]');
+    function update(){
+      var raw = ta.value.trim();
+      var parsed = parseWhiskyLots(ta.value);
+      if(!raw){ prev.innerHTML = ''; if(priceEl) priceEl.readOnly = false; if(lotsEl) lotsEl.readOnly = false; return; }
+      if(!parsed.items.length){
+        prev.innerHTML = '<div style="color:var(--amber);font-size:12px;">No lots recognised yet — each line needs the lot name followed by its five £ amounts.</div>';
+        if(priceEl) priceEl.readOnly = false; if(lotsEl) lotsEl.readOnly = false;
+        return;
+      }
+      if(priceEl){ priceEl.value = parsed.totals.amountDue.toFixed(2); priceEl.readOnly = true; }
+      if(lotsEl){ lotsEl.value = parsed.items.length; lotsEl.readOnly = true; }
+      prev.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">✓ '+parsed.items.length+' lot'+(parsed.items.length===1?'':'s')+' read — Amount paid out and Lots sold are filled in from this table.</div>' + whiskyLotsTableHtml(parsed.items, true);
+    }
+    ta.addEventListener('input', update);
+    update();
+  }
+
+  var _whiskyExpanded = {};
+
   function renderWhiskyPage(){
     var page = document.getElementById('page-whisky');
     if(!page) return;
@@ -8885,7 +9005,10 @@
     var latest = all.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); })[0];
 
     document.getElementById('whiskyStatRow').innerHTML = [
-      whiskyStatCard('Total paid out', fmtMoney(total), 'All time', 'var(--green)', '#2dd4a0'),
+      whiskyStatCard('Total paid out', fmtMoney(total), (function(){
+        var lt = whiskyLotTotals([].concat.apply([], all.map(function(e){ return e.lotItems || []; })));
+        return lt.hammer ? (fmtMoney(lt.hammer) + ' hammer · ' + fmtMoney(lt.fees) + ' fees') : 'All time';
+      })(), 'var(--green)', '#2dd4a0'),
       whiskyStatCard('Payouts', all.length, lotsTotal ? (lotsTotal + ' lot' + (lotsTotal===1?'':'s') + ' sold') : 'Auctions paid out', 'var(--indigo)', '#6d6df0'),
       whiskyStatCard('Average payout', fmtMoney(all.length ? total / all.length : 0), 'Per auction', 'var(--violet)', '#b78cf2'),
       whiskyStatCard('Latest payout', latest ? fmtMoney(saleRevenue(latest)) : '—', latest ? (fmtDateUK(latest.date) + ' · ' + escapeHtml(latest.auctionName || '')) : 'None yet', 'var(--amber)', '#f0b35c')
@@ -8895,7 +9018,8 @@
     var list = entries.filter(isWhiskyPayout);
     if(search){
       list = list.filter(function(e){
-        return (String(e.auctionName||'') + ' ' + String(e.item||'') + ' ' + String(e.notes||'')).toLowerCase().indexOf(search) !== -1;
+        var lotNames = (e.lotItems || []).map(function(it){ return it.name + ' ' + it.lotNo; }).join(' ');
+        return (String(e.auctionName||'') + ' ' + String(e.item||'') + ' ' + String(e.notes||'') + ' ' + lotNames).toLowerCase().indexOf(search) !== -1;
       });
     }
     list = applySortState('whisky', list, {
@@ -8919,6 +9043,8 @@
       { label: 'Payout date', sortKey: 'date' },
       { label: 'Auction', sortKey: 'auction' },
       { label: 'Lots', sortKey: 'lots', cls: 'right' },
+      { label: 'Hammer total', cls: 'right' },
+      { label: 'Fees', cls: 'right' },
       { label: 'Amount paid out', sortKey: 'amount', cls: 'right' },
       { label: 'Notes' },
       { label: '' }
@@ -8927,10 +9053,16 @@
     var tableHtml = '<table><thead>' + headerRow + '</thead><tbody>' +
       list.map(function(e){
         var cancelled = e.status === 'Cancelled';
+        var hasLots = e.lotItems && e.lotItems.length;
+        var lt = hasLots ? whiskyLotTotals(e.lotItems) : null;
+        var open = hasLots && _whiskyExpanded[e.id];
+        var toggle = hasLots ? '<button class="btn" data-toggle-whisky="'+e.id+'" style="padding:2px 8px;font-size:11px;margin-right:6px;">'+(open?'▾':'▸')+' '+e.lotItems.length+' lot'+(e.lotItems.length===1?'':'s')+'</button>' : '';
         return '<tr'+(cancelled?' style="opacity:0.5;"':'')+'>' +
           '<td>'+fmtDateUK(e.date)+'</td>' +
-          '<td>'+escapeHtml(e.auctionName || e.item || '—')+(cancelled?' <span class="badge" style="margin-left:4px;">Cancelled</span>':'')+'</td>' +
+          '<td>'+toggle+escapeHtml(e.auctionName || e.item || '—')+(cancelled?' <span class="badge" style="margin-left:4px;">Cancelled</span>':'')+'</td>' +
           '<td class="right">'+(parseInt(e.lots,10) ? parseInt(e.lots,10) : '—')+'</td>' +
+          '<td class="right">'+(lt ? fmtMoney(lt.hammer) : '—')+'</td>' +
+          '<td class="right">'+(lt ? fmtMoney(lt.fees) : '—')+'</td>' +
           '<td class="right">'+fmtMoney(saleRevenue(e))+'</td>' +
           '<td>'+escapeHtml(e.notes || '—')+'</td>' +
           '<td class="center"><button class="btn" style="padding:4px 10px;font-size:12px;" data-edit-whisky="'+e.id+'">Edit</button> <button class="btn btn-danger-ghost" style="padding:4px 10px;font-size:12px;" data-delete-entry="'+e.id+'" data-delete-label="'+escapeAttr(e.auctionName || e.item)+'">Delete</button></td>' +
@@ -8938,11 +9070,27 @@
       }).join('') +
       '</tbody></table>';
 
-    wrap.innerHTML = wrapTableForDisplay('whisky', 'Whisky Auction Payouts', tableHtml);
+    var detailHtml = list.filter(function(e){ return _whiskyExpanded[e.id] && e.lotItems && e.lotItems.length; }).map(function(e){
+      return '<div style="margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--surface-2);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="font-weight:600;font-size:13px;">Lot breakdown — '+escapeHtml(e.auctionName || e.item)+' <span style="color:var(--text-muted);font-weight:400;">· paid '+fmtDateUK(e.date)+'</span></div>' +
+          '<button class="btn" data-toggle-whisky="'+e.id+'" style="padding:2px 8px;font-size:11px;">Hide</button>' +
+        '</div>' +
+        '<div style="overflow-x:auto;">'+whiskyLotsTableHtml(e.lotItems)+'</div>' +
+      '</div>';
+    }).join('');
+    wrap.innerHTML = wrapTableForDisplay('whisky', 'Whisky Auction Payouts', tableHtml) + detailHtml;
     wireSortableHeaders(wrap, renderWhiskyPage);
     wireMaximizeButtons(wrap);
     TABLE_RERENDER_FNS.whisky = renderWhiskyPage;
 
+    wrap.querySelectorAll('[data-toggle-whisky]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-toggle-whisky');
+        _whiskyExpanded[id] = !_whiskyExpanded[id];
+        renderWhiskyPage();
+      });
+    });
     wrap.querySelectorAll('[data-edit-whisky]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var id = this.getAttribute('data-edit-whisky');
