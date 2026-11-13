@@ -349,6 +349,8 @@
   .page-header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
   .page-header p { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
   .header-right { display: flex; gap: 8px; align-items: center; }
+  .date-range-custom { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 12px; }
+  .date-range-custom input[type="date"] { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 13px; padding: 6px 10px; color-scheme: dark; }
   select, .btn {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1084,7 +1086,7 @@
   </div>
   <div class="sidebar-foot">
     <span>SolePlayCollect LTD</span>
-    <span class="version-pill">v0.56</span>
+    <span class="version-pill">v0.57</span>
   </div>
 </div>
 
@@ -1184,11 +1186,17 @@
         <p>Detailed performance breakdown</p>
       </div>
       <div class="header-right">
-        <select id="analyticsRangeSelect">
+        <select id="analyticsRangeSelect" title="Date range">
           <option value="all">All time</option>
-          <option value="30">Last 30 days</option>
-          <option value="7">Last 7 days</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="1m">Last 1 month</option>
+          <option value="1y">Last 1 year</option>
+          <option value="custom">Custom range…</option>
         </select>
+        <span class="date-range-custom" id="analyticsCustomRange" style="display:none;">
+          <input type="date" id="analyticsRangeFrom" title="From"> to <input type="date" id="analyticsRangeTo" title="To">
+        </span>
       </div>
     </div>
 
@@ -1338,6 +1346,17 @@
       <div><h1>Sales</h1><p>Revenue across every selling channel</p></div>
       <div class="header-right">
         <input type="text" id="salesSearch" placeholder="Search sales..." style="max-width:220px;">
+        <select id="salesRangeSelect" title="Date range">
+          <option value="all">All time</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="1m">Last 1 month</option>
+          <option value="1y">Last 1 year</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        <span class="date-range-custom" id="salesCustomRange" style="display:none;">
+          <input type="date" id="salesRangeFrom" title="From"> to <input type="date" id="salesRangeTo" title="To">
+        </span>
         <button class="btn btn-sheet-trigger" id="bulkEditSalesBtn">⊞ Bulk Edit</button>
         <button class="btn btn-primary" id="addSaleBtn">+ Add</button>
       </div>
@@ -2256,6 +2275,8 @@
       if(s.invView)            _invView            = s.invView;
       if(s.invGroupBy)         _invGroupBy         = s.invGroupBy;
       if(s.salesPlatformFilter) salesPlatformFilter = s.salesPlatformFilter;
+      if(s.salesDateRange && s.salesDateRange.key) salesDateRange = s.salesDateRange;
+      if(s.analyticsDateRange && s.analyticsDateRange.key) analyticsDateRange = s.analyticsDateRange;
       if(typeof s.sidebarHidden === 'boolean') _sidebarHidden = s.sidebarHidden;
     } catch(e) { console.warn('Could not load UI state:', e); }
   }
@@ -2275,6 +2296,8 @@
         invView:            _invView,
         invGroupBy:         _invGroupBy,
         salesPlatformFilter:salesPlatformFilter,
+        salesDateRange:     salesDateRange,
+        analyticsDateRange: analyticsDateRange,
         sidebarHidden:      _sidebarHidden
       }));
     } catch(e) {}
@@ -2620,6 +2643,76 @@
     return y + '-' + m + '-' + day;
   }
   function todayISO(){ return toLocalISO(new Date()); }
+
+  // ---------- Shared date-range filter (Analytics + Sales) ----------
+  // Keys: 'all' | '24h' | '7d' | '1m' | '1y' | 'custom'. Entry dates are
+  // day-level ISO strings (no time), so comparisons are on YYYY-MM-DD and
+  // "Last 24 hours" means yesterday + today. 7 days = today and the 6 before.
+  function dateRangeBounds(key, customFrom, customTo){
+    if(!key || key === 'all') return null;
+    if(key === 'custom'){
+      var f = customFrom || '', t = customTo || '';
+      if(f && t && f > t){ var tmp = f; f = t; t = tmp; }
+      return (f || t) ? { from: f, to: t } : null;
+    }
+    var d = new Date();
+    if(key === '24h')      d.setDate(d.getDate() - 1);
+    else if(key === '7d')  d.setDate(d.getDate() - 6);
+    else if(key === '1m')  d.setMonth(d.getMonth() - 1);
+    else if(key === '1y')  d.setFullYear(d.getFullYear() - 1);
+    else return null;
+    return { from: toLocalISO(d), to: '' };
+  }
+  function entryInDateRange(e, b){
+    if(!b) return true;
+    var ds = String(e.date || '').slice(0, 10);
+    if(!ds) return false;
+    if(b.from && ds < b.from) return false;
+    if(b.to && ds > b.to) return false;
+    return true;
+  }
+  function dateRangeLabel(key, customFrom, customTo){
+    var map = { all:'All time', '24h':'Last 24 hours', '7d':'Last 7 days', '1m':'Last 1 month', '1y':'Last 1 year' };
+    if(key !== 'custom') return map[key] || 'All time';
+    var b = dateRangeBounds('custom', customFrom, customTo);
+    if(!b) return 'All time';
+    if(b.from && b.to) return fmtDateUK(b.from) + ' – ' + fmtDateUK(b.to);
+    return b.from ? 'From ' + fmtDateUK(b.from) : 'Up to ' + fmtDateUK(b.to);
+  }
+  // Wires a range <select> + its custom From/To inputs. getState/setState
+  // read and write the page's {key, from, to}; onChange re-renders.
+  function wireDateRangeControl(prefix, getState, setState, onChange){
+    var sel = document.getElementById(prefix + 'RangeSelect');
+    var box = document.getElementById(prefix + 'CustomRange');
+    var fromEl = document.getElementById(prefix + 'RangeFrom');
+    var toEl = document.getElementById(prefix + 'RangeTo');
+    if(!sel) return;
+    function sync(){
+      var st = getState();
+      if(!sel.querySelector('option[value="'+st.key+'"]')) st.key = 'all';
+      sel.value = st.key;
+      fromEl.value = st.from || '';
+      toEl.value = st.to || '';
+      box.style.display = st.key === 'custom' ? 'inline-flex' : 'none';
+    }
+    sel.addEventListener('change', function(){
+      var st = getState();
+      st.key = sel.value;
+      if(st.key === 'custom' && !st.from && !st.to){
+        var d = new Date(); d.setMonth(d.getMonth() - 1);
+        st.from = toLocalISO(d); st.to = todayISO();
+      }
+      setState(st); sync(); onChange();
+    });
+    [fromEl, toEl].forEach(function(el){
+      el.addEventListener('change', function(){
+        var st = getState();
+        st.from = fromEl.value; st.to = toEl.value;
+        setState(st); onChange();
+      });
+    });
+    sync();
+  }
 
   var CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', JPY: '¥' };
   var CURRENCY_LOCALES = { GBP: 'en-GB', USD: 'en-US', EUR: 'en-IE', JPY: 'ja-JP' };
@@ -3327,11 +3420,9 @@
   var analyticsCharts = {};
 
   function getAnalyticsFilteredEntries(){
-    var range = document.getElementById('analyticsRangeSelect').value;
-    if(range === 'all') return entries;
-    var cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - parseInt(range, 10));
-    return entries.filter(function(e){ return new Date(e.date) >= cutoff; });
+    var b = dateRangeBounds(analyticsDateRange.key, analyticsDateRange.from, analyticsDateRange.to);
+    if(!b) return entries;
+    return entries.filter(function(e){ return entryInDateRange(e, b); });
   }
 
   function renderAnalytics(){
@@ -3339,8 +3430,8 @@
     if(!page) return;
 
     var list = getAnalyticsFilteredEntries();
-    var rangeLabel = document.getElementById('analyticsRangeSelect').selectedOptions[0].text.toLowerCase();
-    document.getElementById('analyticsChartSub').textContent = rangeLabel.charAt(0).toUpperCase()+rangeLabel.slice(1)+' — realised sales by sold date';
+    var rangeLabel = dateRangeLabel(analyticsDateRange.key, analyticsDateRange.from, analyticsDateRange.to);
+    document.getElementById('analyticsChartSub').textContent = rangeLabel+' — realised sales by sold date';
 
     var sales = list.filter(function(e){ return e.type === 'sale' && e.status !== 'Cancelled'; });
     var purchases = list.filter(function(e){ return e.type === 'purchase'; });
@@ -3934,7 +4025,7 @@
     TABLE_RERENDER_FNS.analyticsPlatform = function(){ renderAnalyticsPlatformTable(sales); };
   }
 
-  document.getElementById('analyticsRangeSelect').addEventListener('change', renderAnalytics);
+  // Analytics date-range control is wired after loadUIState() (see below) so it restores the saved range.
 
   // ---------- Dashboard overview ----------
   var overviewMetric = 'both';
@@ -4815,6 +4906,8 @@
   var _invView = 'table';       // 'table' | 'grouped'
   var _invGroupBy = 'item';     // 'item' | 'site' | 'brand'
   var salesPlatformFilter = 'all';
+  var salesDateRange = { key: 'all', from: '', to: '' };
+  var analyticsDateRange = { key: 'all', from: '', to: '' };
   var _expensesView = 'list';
   var _expensesType = 'all';
   var _sidebarHidden = false;
@@ -4853,6 +4946,10 @@
   }
 
   loadUIState();
+  wireDateRangeControl('analytics',
+    function(){ return analyticsDateRange; },
+    function(st){ analyticsDateRange = st; saveUIState(); },
+    renderAnalytics);
 
   function applyColPrefs(tableKey){
     var prefs = colPrefs[tableKey];
@@ -7598,6 +7695,7 @@
         var searchEl = document.getElementById('salesSearch');
         var search = (searchEl && searchEl.value || '').toLowerCase();
         if(search && String(e.item||'').toLowerCase().indexOf(search) === -1) return false;
+        if(!entryInDateRange(e, dateRangeBounds(salesDateRange.key, salesDateRange.from, salesDateRange.to))) return false;
         return true;
       },
       columns: [
@@ -8070,6 +8168,8 @@
     var sales = allSales.slice();
     if(salesPlatformFilter !== 'all') sales = sales.filter(function(e){ return (e.platform||'Other') === salesPlatformFilter; });
     if(search) sales = sales.filter(function(e){ return String(e.item||'').toLowerCase().indexOf(search) !== -1; });
+    var salesBounds = dateRangeBounds(salesDateRange.key, salesDateRange.from, salesDateRange.to);
+    if(salesBounds) sales = sales.filter(function(e){ return entryInDateRange(e, salesBounds); });
 
     sales = applySortState('sales', sales, {
       item:      function(a,b){ return compareText(a.item,b.item); },
@@ -8085,11 +8185,12 @@
     }
 
     document.getElementById('salesCountSub').textContent = sales.length + ' sale'+(sales.length===1?'':'s') +
+      (salesBounds ? ' · ' + dateRangeLabel(salesDateRange.key, salesDateRange.from, salesDateRange.to) : '') +
       (cancelledSalesCount ? ' · ' + cancelledSalesCount + ' cancelled (excluded)' : '');
     var wrap = document.getElementById('salesTableWrap');
 
     if(!sales.length){
-      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">No sales logged yet.</div>';
+      wrap.innerHTML = '<div class="empty-state" style="padding:60px;">' + (allSales.length ? 'No sales match this date range or filter.' : 'No sales logged yet.') + '</div>';
       return;
     }
 
@@ -8244,6 +8345,10 @@
   }
 
   document.getElementById('salesSearch').addEventListener('input', renderSalesTable);
+  wireDateRangeControl('sales',
+    function(){ return salesDateRange; },
+    function(st){ salesDateRange = st; _salesPage = 1; saveUIState(); },
+    renderSalesTable);
   document.querySelectorAll('#salesPlatformFilter .seg-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('#salesPlatformFilter .seg-btn').forEach(function(b){ b.classList.remove('active'); });
